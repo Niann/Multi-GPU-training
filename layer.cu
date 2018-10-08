@@ -2,12 +2,12 @@
 #include <math.h>
 #include <stdlib.h>
 #include <random>
-#include "cublas_v2.h"
 
+#include "cublas_v2.h"
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
-# define IDX2C(i, j, ld) ((( j )*( ld ))+( i )) // ld - leading dimension
+#define IDX2C(i, j, ld) ((( j )*( ld ))+( i )) // ld - leading dimension
 
 std::default_random_engine generator;
 std::normal_distribution<float> distribution(0.0, 0.5);
@@ -15,7 +15,7 @@ std::normal_distribution<float> distribution(0.0, 0.5);
 void initialization(float* a, int size) {
 	for (int i = 0; i < size; i++) {
 		a[i] = distribution(generator);
-		a[i] = i;
+		//a[i] = i;
 	}
 }
 
@@ -34,17 +34,31 @@ __global__ void reluHelper(float* Z, float* dZ, int numElements) {
 	}
 }
 
-__global__ void elementMulHelper(float* A, float* B, int numElements) {
+__global__ void elementMulHelper(float* A, float* B, int numElements, bool invB) {
 	// perform relu activation and calculate gradients simultaneously
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < numElements) {
-		A[i] *= B[i];
+		if (invB) {
+			A[i] /= B[i];
+		}
+		else {
+			A[i] *= B[i];
+		}
+	}
+}
+
+__global__ void expHelper(float* A, int numElements) {
+	// perform element-wise exp
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < numElements) {
+		A[i] = exp(A[i]);
 	}
 }
 
 __global__ void elementAddHelper(float* A, float* B, float alpha, int numElements) {
-	// perform relu activation and calculate gradients simultaneously
+	// perform element-wise addition
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
 	if (i < numElements) {
@@ -65,7 +79,7 @@ void printMatrix(float* a, int r, int c) {
 }
 
 class Layer {
-		
+	protected:
 		int l_prev, l_curr; // l_prev : neural number of previous layer, l : neural number of current layer
 		float* W;  // weights, matrix of size (l_curr, l_prev)
 		float* dW; // W gradients
@@ -98,7 +112,6 @@ class Layer {
 
 		float* forward(const float* X_in, int batch) {
 			// X_in input matrix, size (l_prev, batch_size), each column is a data point
-
 			A_prev = X_in; // save activation from previous layer for backprop
 			float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
 			printf("Z:\n");
@@ -122,7 +135,7 @@ class Layer {
 			dA_prev = (float *)malloc(numElements * sizeof(float));
 
 			// calculate dZ, dW, db, dA_prev
-			elementwiseMul(l_curr * batch, dZ, dA);                                        // dZ = dL/dA * dA/dZ
+			elementwiseMul(l_curr * batch, dZ, dA, false);                                        // dZ = dL/dA * dA/dZ
 			printf("dZ:\n");
 			printMatrix(dZ, l_curr, batch);
 
@@ -130,7 +143,7 @@ class Layer {
 			printf("dW:\n");
 			printMatrix(dW, l_curr, l_prev);
 
-			reduceSum(dZ, db, l_curr, batch);                                              // db = dL/dZ * dZ/db = 1/m * sum(dZ, axis=1)
+			reduceSum(dZ, db, l_curr, batch, false);                                              // db = dL/dZ * dZ/db = 1/m * sum(dZ, axis=1)
 			printf("db:\n");
 			printMatrix(db, l_curr, 1);
 
@@ -150,7 +163,17 @@ class Layer {
 			printMatrix(b, l_curr, 1);
 		}
 
-	private:
+		void freeMemory() {
+			// release memory
+			free(W);
+			free(dW);
+			free(b);
+			free(db);
+			free(dZ);
+			free((float*)A_prev);
+		}
+
+	protected:
 		// helper functions
 		float* WX_b(const float* W, const float* X, const float* b, int m, int n, int k) {
 			// perform W @ X + b in a batch
@@ -161,7 +184,7 @@ class Layer {
 			// c is matrix of size (m, n)
 			float * c;
 			c = (float *)malloc(m * n * sizeof(float)); // allocate memory for c
-			broadcast_b(c, b, m, n); // broadcast b
+			broadcast(c, b, m, n, true); // broadcast b
 
 			matrixMul(W, X, c, m, n, k, false, false, 1.0f, 1.0f);
 
@@ -218,25 +241,35 @@ class Layer {
 			cublasDestroy(handle); // destroy CUBLAS context
 		}
 
-		void reduceSum(float* A, float* b, int l, int batch) {
-			// A - matrix of size (l, batch)
-			// b - vector of size (batch, 1)
-			// calculate reduce sum of A row-wise and store in b
-			// b = alpha * reduce_sum(A, axis=1)
+		void reduceSum(float* A, float* b, int l, int batch, bool columnwise) {
+			// reduce sum row-wise or column-wise
+			// store results in b
 			// get b by matrix - vector multiplication
 			
 			// create a vector of same size as b filled with 1
 			float* x;
-			x = (float *)malloc(batch * sizeof(float));
-			for (int i = 0; i < batch; i++)
-				x[i] = 1;
+			float alpha;
+			if (columnwise) {
+				x = (float *)malloc(l * sizeof(float));
+				alpha = 1.0f;
+				for (int i = 0; i < l; i++)
+					x[i] = 1;
 
-			matrixMul(A, x, b, l, 1, batch, false, false, 1/(float)batch, 0.f);
+				matrixMul(A, x, b, batch, 1, l, true, false, alpha, 0.f);
+			}
+			else {
+				x = (float *)malloc(batch * sizeof(float));
+				alpha = 1 / (float)batch;
+				for (int i = 0; i < batch; i++)
+					x[i] = 1;
+
+				matrixMul(A, x, b, l, 1, batch, false, false, alpha, 0.f);
+			}
 
 			free(x);
 		}
 
-		void elementwiseMul(int numElements, float* A, const float* B) {
+		void elementwiseMul(int numElements, float* A, const float* B, bool invB) {
 			// element-wise matrix multiplication, store results in A
 			// A = A * B
 			unsigned int mem_size = numElements * sizeof(*A);
@@ -253,7 +286,7 @@ class Layer {
 
 			int threadsPerBlock = 256;
 			int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
-			elementMulHelper<<<blocksPerGrid, threadsPerBlock >>>(d_A, d_B, numElements);
+			elementMulHelper<<<blocksPerGrid, threadsPerBlock >>>(d_A, d_B, numElements, invB);
 
 			// copy A from device to host
 			cudaMemcpy(A, d_A, mem_size, cudaMemcpyDeviceToHost); // d_A -> A
@@ -313,13 +346,23 @@ class Layer {
 			cudaFree(d_dZ); // free device memory
 		}
 
-		void broadcast_b(float* c, const float* b, int l, int batch) {
+		void broadcast(float* c, const float* b, int l, int batch, bool row) {
 			// broadcast bias in a batch
 			// c - output matrix of size (l, batch_size)
-			// b - bias vector of size (l,)
-			for (int i = 0; i < l; i++) {
-				for (int j = 0; j < batch; j++) {
-					c[IDX2C(i, j, l)] = b[i];
+			// b - vector of size (l, 1) if row
+			//     vector of size (batch, 1) if column
+			if (row) {
+				for (int i = 0; i < l; i++) {
+					for (int j = 0; j < batch; j++) {
+						c[IDX2C(i, j, l)] = b[i];
+					}
+				}
+			}
+			else {
+				for (int i = 0; i < l; i++) {
+					for (int j = 0; j < batch; j++) {
+						c[IDX2C(i, j, l)] = b[j];
+					}
 				}
 			}
 			printf("initial c matrix:\n");
@@ -327,10 +370,75 @@ class Layer {
 		}
 };
 
+class SoftmaxLayer: public Layer{
+	float* P;
+
+    public:
+		SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
+
+		float* forward(const float* X_in, int batch) {
+			// X_in input matrix, size (l_prev, batch_size), each column is a data point
+			A_prev = X_in; // save activation from previous layer for backprop
+			float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
+			printf("Z:\n");
+			printMatrix(X_out, l_curr, batch);
+
+			// allocate memory for P (prob matrix) and perform activation
+			int numElements = l_curr * batch;
+			P = (float *)malloc(numElements * sizeof(float));
+			softmax(numElements, X_out);
+			P = X_out; // store P for backprop
+
+			return X_out; // X_out = softmax(Z)
+		}
+
+	private:
+		void softmax(int numElements, float* Z) {
+			// softmax operation over each coloum of Z
+			// store gradients in dZ
+			// 1st x = exp(x) for each element x in Z
+			// 2nd p = sum(x) for each column in Z
+			// 3rd x = x/p for each element each column in Z
+			float* d_Z;
+			int batch = numElements / l_curr;
+			unsigned int mem_size = numElements * sizeof(*Z);
+
+			// allocate memory for Z on device
+			cudaMalloc((void **)& d_Z, mem_size);
+			cudaMemcpy(d_Z, Z, mem_size, cudaMemcpyHostToDevice); // Z -> d_Z
+
+			// 1st x = exp(x) for each element x in Z
+			int threadsPerBlock = 256;
+			int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
+			expHelper<<<blocksPerGrid, threadsPerBlock>>>(d_Z, numElements);
+
+			cudaMemcpy(Z, d_Z, mem_size, cudaMemcpyDeviceToHost);   // d_Z  -> Z
+			cudaFree(d_Z);  // free device memory
+			printf("exp:\n");
+			printMatrix(Z, l_curr, batch);
+
+			// 2nd p = sum(x) for each column in Z
+			float* p; // vector length batch_size
+			p = (float *)malloc(batch * sizeof(float));
+			reduceSum(Z, p, l_curr, batch, true);
+			printf("p:\n");
+			printMatrix(p, batch, 1);
+
+			// 3rd x = x/p for each element each column in Z
+			float * P; // probability matrix of size (l_curr, batch)
+			P = (float *)malloc(numElements * sizeof(float));
+			broadcast(P, p, l_curr, batch, false);
+			elementwiseMul(numElements, Z, P, true);
+			free(p);
+			free(P);
+		}
+};
+
 int main() {
-	int batch = 3;
+	int batch = 5;
 	int feature = 4;
-	int l1 = 2;
+	int l1 = 3;
+	int l2 = 2;
 
 	float* X;
 	X = (float *)malloc(feature * batch * sizeof(float));
@@ -340,10 +448,15 @@ int main() {
 	printMatrix(X, feature, batch);
 
 	Layer l = Layer(feature, l1);
+	SoftmaxLayer s = SoftmaxLayer(l1, l2);
 	float* X1 = l.forward(X, batch);
 	printf("output matrix:\n");
 	printMatrix(X1, l1, batch);
 
+	float* X2 = s.forward(X1, batch);
+	printf("output matrix:\n");
+	printMatrix(X2, l2, batch);
+	/*
 	printf("\nbackward pass\n");
 	float* dA;
 	dA = (float *)malloc(l1 * batch * sizeof(float));
@@ -357,4 +470,5 @@ int main() {
 
 	printf("\ngradient updata\n");
 	l.gradientUpdate(1);
+	l.freeMemory(); */
 }
