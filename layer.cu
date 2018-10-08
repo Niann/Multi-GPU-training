@@ -34,7 +34,7 @@ __global__ void reluHelper(float* Z, float* dZ, int numElements) {
 	}
 }
 
-__global__ void elementMulHelper(float* A, float* B, int numElements, bool invB) {
+__global__ void elementMulHelper(float* A, const float* B, int numElements, bool invB) {
 	// perform relu activation and calculate gradients simultaneously
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -57,7 +57,7 @@ __global__ void expHelper(float* A, int numElements) {
 	}
 }
 
-__global__ void elementAddHelper(float* A, float* B, float alpha, int numElements) {
+__global__ void elementAddHelper(float* A, const float* B, float alpha, int numElements) {
 	// perform element-wise addition
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
@@ -149,6 +149,7 @@ class Layer {
 
 			matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);      // dA_prev = dL/dZ * dZ/dA_prev = W.T @ dZ
 
+			free(dZ);
 			return dA_prev;
 		}
 
@@ -169,7 +170,6 @@ class Layer {
 			free(dW);
 			free(b);
 			free(db);
-			free(dZ);
 			free((float*)A_prev);
 		}
 
@@ -295,7 +295,7 @@ class Layer {
 			cudaFree(d_B); // free device memory
 		}
 
-		void elementwiseAdd(int numElements, float* A, float* B, float alpha) {
+		void elementwiseAdd(int numElements, float* A, const float* B, float alpha) {
 			// element-wise matrix/vector addtion
 			// A = A + alpha * B
 			unsigned int mem_size = numElements * sizeof(*A);
@@ -371,7 +371,6 @@ class Layer {
 };
 
 class SoftmaxLayer: public Layer{
-	float* P;
 
     public:
 		SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
@@ -385,11 +384,33 @@ class SoftmaxLayer: public Layer{
 
 			// allocate memory for P (prob matrix) and perform activation
 			int numElements = l_curr * batch;
-			P = (float *)malloc(numElements * sizeof(float));
+			dZ = (float *)malloc(l_curr * batch * sizeof(float));
 			softmax(numElements, X_out);
-			P = X_out; // store P for backprop
+			dZ = X_out; // store for backprop
 
 			return X_out; // X_out = softmax(Z)
+		}
+
+		float* backward(const float* Y, int batch) {
+			// y - one-hot matrix of size (l_curr, batch)
+			// each column is a one_hot label for corresponding forward data
+			// dA_prev out_put matrix - gradient of activation from previous layer
+			float* dA_prev;
+			int numElements = l_prev * batch;
+			dA_prev = (float *)malloc(numElements * sizeof(float));
+
+			// allocate memory for dZ
+			
+			elementwiseAdd(l_curr * batch, dZ, Y, -1.0f);                                         // dZ = P - Y
+			printf("dL/dZ:\n");
+			printMatrix(dZ, l_curr, batch);
+
+			matrixMul(dZ, A_prev, dW, l_curr, l_prev, batch, false, true, 1 / (float)batch, 0.f); // dW = 1/m * dZ @ A_prev.T
+			reduceSum(dZ, db, l_curr, batch, false);                                              // db = 1/m * sum(dZ, axis=1)
+			matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);             // dA = W.T @ dZ
+
+			free(dZ);
+			return dA_prev;
 		}
 
 	private:
@@ -441,8 +462,11 @@ int main() {
 	int l2 = 2;
 
 	float* X;
+	float* Y;
 	X = (float *)malloc(feature * batch * sizeof(float));
 	initialization(X, feature * batch);
+	Y = (float *)malloc(l2 * batch * sizeof(float));
+	initialization(Y, l2 * batch);
 	printf("foward pass\n");
 	printf("input matrix:\n");
 	printMatrix(X, feature, batch);
@@ -456,19 +480,24 @@ int main() {
 	float* X2 = s.forward(X1, batch);
 	printf("output matrix:\n");
 	printMatrix(X2, l2, batch);
-	/*
+	
 	printf("\nbackward pass\n");
-	float* dA;
-	dA = (float *)malloc(l1 * batch * sizeof(float));
-	initialization(dA, l1 * batch);
 	printf("input matrix:\n");
-	printMatrix(dA, l1, batch);
+	printMatrix(Y, l2, batch);
 
-	float* dA0 = l.backward(dA, batch);
+	float* dA1 = s.backward(Y, batch);
+	printf("output matrix:\n");
+	printMatrix(dA1, l1, batch);
+
+	float* dA0 = l.backward(dA1, batch);
 	printf("output matrix:\n");
 	printMatrix(dA0, feature, batch);
-
-	printf("\ngradient updata\n");
+	
+	printf("\ngradient update\n");
+	s.gradientUpdate(1);
 	l.gradientUpdate(1);
-	l.freeMemory(); */
+
+	s.freeMemory();
+	l.freeMemory();
+	free(Y);
 }
