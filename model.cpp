@@ -1,7 +1,7 @@
 #include "model.h"
 #include "mnist.h"
 
-#define IDX2C(i, j, ld) ((( i )*( ld ))+( j )) // ld - leading dimension
+#define IDX2C(i, j, ld) ((( j )*( ld ))+( i )) // ld - leading dimension
 
 
 Model::Model(int in, int out, float lr, int batch_size, vector<int> layer_size) {
@@ -10,8 +10,9 @@ Model::Model(int in, int out, float lr, int batch_size, vector<int> layer_size) 
 	this->batch_size = batch_size;
 	this->learning_rate = lr;
 	layers.push_back(Layer(in, layer_size[0]));
+	//layers.push_back(Layer(in, out));
 	for (int i = 0; i < layer_size.size() - 1; i++) {
-		layers.push_back(Layer(layer_size[i], layer_size[i]));
+		layers.push_back(Layer(layer_size[i], layer_size[i+1]));
 	}
 	layers.push_back(SoftmaxLayer(layer_size.back(), out));
 }
@@ -26,14 +27,14 @@ void Model::train(vector<vector<float>> data,vector<int> label) {
 	float* Y = (float *)malloc(data.size() * this->out_size * sizeof(float));
 	for (int i = 0; i < data.size(); i++) {
 		for (int j = 0; j < this->feature_size; j++) {
-			X[IDX2C(i, j, this->feature_size)] = data[i][j];
+			X[IDX2C(i, j, data.size())] = data[i][j];
 		}
 	}
 	for (int i = 0; i < label.size(); i++) {
 		for (int j = 0; j < this->out_size; j++) {
-			Y[IDX2C(i, j, this->out_size)] = 0;
+			Y[IDX2C(i, j, data.size())] = 0;
 		}
-		Y[IDX2C(i, label[i], this->out_size)] = 1;
+		Y[IDX2C(i, label[i], data.size())] = 1;
 	}
 
 	for (int i = 0; i < this->layers.size(); i++) {
@@ -67,7 +68,7 @@ float Model::accuracy(vector<vector<float>> &data,vector<int> &label) {
 	float* X = (float *)malloc(data.size() * this->feature_size * sizeof(float));
 	for (int i = 0; i < data.size(); i++) {
 		for (int j = 0; j < this->feature_size; j++) {
-			X[IDX2C(i, j, this->feature_size)] = data[i][j];
+			X[IDX2C(i, j, data.size())] = data[i][j];
 		}
 	}
 
@@ -75,6 +76,7 @@ float Model::accuracy(vector<vector<float>> &data,vector<int> &label) {
 		X = this->layers[i].forward(X, data.size());
 	}
 	int count = 0;
+	//for (int i = 0; i < data.size()/200; i++) {
 	for (int i = 0; i < data.size(); i++) {
 		float* Y1 = X + i * this->out_size;
 		float* Y2 = X + (i + 1) * this->out_size;
@@ -98,7 +100,8 @@ int main() {
 	vector<vector<float> > train_X;
 	read_Mnist(filename, train_X);
 	cout << train_X.size() << endl;
-	cout << train_X[0].size() << endl;
+	//for (int i=0;i<700;i++)
+	//	cout << train_X[0][i] << "	";
 
 	string filename1 = "t10k-labels-idx1-ubyte";
 
@@ -114,11 +117,11 @@ int main() {
 	cout << "data loaded" << endl;
 	
 	vector<int> layers;
-	layers.push_back(3);
-	layers.push_back(3);
+	layers.push_back(300);
+	layers.push_back(300);
 
-	Model* model = new Model(image_size,10,0.001,32, layers);
-	for (int i = 0; i < 10; i++) {
+	Model* model = new Model(image_size,10,0.01,32, layers);
+	for (int i = 0; i < 50; i++) {
 		cout << "start for epoch: " << i << endl;
 		model->epoch(train_X, train_y);
 	}
