@@ -53,7 +53,7 @@ void Model::train(vector<vector<float>> data,vector<int> label, bool print) {
 		layers[i]->gradientUpdate(this->learning_rate);
 	}
 }
-	
+
 void Model::epoch(vector<vector<float>> &data, vector<int> &label) {
 	for (int i = 0; i <= data.size() - batch_size; i += batch_size) {
 		vector<vector<float>> batch_data;
@@ -82,6 +82,7 @@ float Model::accuracy(vector<vector<float>> &data,vector<int> &label) {
 		X = this->layers[i]->forward(X, data.size());
 	}
 	int count = 0;
+	//for (int i = 0; i < data.size()/200; i++) {
 	for (int i = 0; i < data.size(); i++) {
 		/*
 		for (int j = 0; j < this->out_size; j++) {
@@ -111,7 +112,8 @@ int main() {
 	vector<vector<float> > train_X;
 	read_Mnist(filename, train_X);
 	cout << train_X.size() << endl;
-	cout << train_X[0].size() << endl;
+	//for (int i=0;i<700;i++)
+	//	cout << train_X[0][i] << "	";
 
 	string filename1 = "t10k-labels-idx1-ubyte";
 
@@ -121,14 +123,14 @@ int main() {
 
 	cout << train_y.size() << endl;
 	cout << "data loaded" << endl;
-	
+
 	vector<int> layers;
 	layers.push_back(200);
 
 	Model* model = new Model(image_size, 10, 0.1f, 32, layers);
 	for (int i = 0; i < 10; i++) {
 		cout << "start for epoch: " << i << endl;
-		model->epoch(train_X, train_y); 
+		model->epoch(train_X, train_y);
 	}
 	return 0;
 }
