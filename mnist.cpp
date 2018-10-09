@@ -51,7 +51,7 @@ void read_Mnist(string filename, vector<vector<float> > &vec)
 	}
 }
 
-void read_Mnist_Label(string filename, vector<float> &vec)
+void read_Mnist_Label(string filename, vector<int> &vec)
 {
 	ifstream file(filename, ios::binary);
 	if (file.is_open())
@@ -68,11 +68,11 @@ void read_Mnist_Label(string filename, vector<float> &vec)
 		{
 			unsigned char temp = 0;
 			file.read((char*)&temp, sizeof(temp));
-			vec[i] = (float)temp;
+			vec[i] = (int)temp;
 		}
 	}
 }
-
+/*
 int main()
 {
 	string filename = "t10k-images-idx3-ubyte";
@@ -101,3 +101,4 @@ int main()
 
 	return 0;
 }
+*/

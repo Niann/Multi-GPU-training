@@ -4,8 +4,6 @@
 #include <random>
 
 #include "cublas_v2.h"
-#ifndef LAYER_H
-#define LAYER_H
 
 
 #include <cuda_runtime.h>
@@ -50,5 +48,3 @@ private:
 	void softmax(int numElements, float* Z);
 
 };
-
-#endif // !LAYER_H
