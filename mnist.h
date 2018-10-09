@@ -7,6 +7,6 @@
 
 using namespace std;
 
-void read_Mnist(string filename, vector<vector<double> > &vec);
+void read_Mnist(string filename, vector<vector<float> > &vec);
 
-void read_Mnist_Label(string filename, vector<double> &vec);
+void read_Mnist_Label(string filename, vector<float> &vec);

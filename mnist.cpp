@@ -17,7 +17,7 @@ int ReverseInt(int i)
 	return((int)ch1 << 24) + ((int)ch2 << 16) + ((int)ch3 << 8) + ch4;
 }
 
-void read_Mnist(string filename, vector<vector<double> > &vec)
+void read_Mnist(string filename, vector<vector<float> > &vec)
 {
 	ifstream file(filename, ios::binary);
 	if (file.is_open())
@@ -36,14 +36,14 @@ void read_Mnist(string filename, vector<vector<double> > &vec)
 		n_cols = ReverseInt(n_cols);
 		for (int i = 0; i < number_of_images; ++i)
 		{
-			vector<double> tp;
+			vector<float> tp;
 			for (int r = 0; r < n_rows; ++r)
 			{
 				for (int c = 0; c < n_cols; ++c)
 				{
 					unsigned char temp = 0;
 					file.read((char*)&temp, sizeof(temp));
-					tp.push_back((double)temp);
+					tp.push_back((float)temp);
 				}
 			}
 			vec.push_back(tp);
@@ -51,7 +51,7 @@ void read_Mnist(string filename, vector<vector<double> > &vec)
 	}
 }
 
-void read_Mnist_Label(string filename, vector<double> &vec)
+void read_Mnist_Label(string filename, vector<float> &vec)
 {
 	ifstream file(filename, ios::binary);
 	if (file.is_open())
@@ -68,11 +68,11 @@ void read_Mnist_Label(string filename, vector<double> &vec)
 		{
 			unsigned char temp = 0;
 			file.read((char*)&temp, sizeof(temp));
-			vec[i] = (double)temp;
+			vec[i] = (float)temp;
 		}
 	}
 }
-/*
+
 int main()
 {
 	string filename = "t10k-images-idx3-ubyte";
@@ -81,7 +81,7 @@ int main()
 
 	   
 	//read MNIST iamge into double vector
-	vector<vector<double> > vec;
+	vector<vector<float> > vec;
 	read_Mnist(filename, vec);
 	cout<<vec.size()<<endl;
 	cout<<vec[0].size()<<endl;
@@ -90,12 +90,14 @@ int main()
     string filename1 = "t10k-labels-idx1-ubyte";
 	
 	//read MNIST label into double vector
-	vector<double> vec1(number_of_images);
+	vector<float> vec1(number_of_images);
 	read_Mnist_Label(filename1, vec1);
 	cout<<vec1.size()<<endl;
+	for (int i = 0; i < 100; i++) {
+		cout << vec1[i] << endl;
+	}
 
 	
 
 	return 0;
 }
-*/
