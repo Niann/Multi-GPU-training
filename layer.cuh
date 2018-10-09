@@ -4,12 +4,16 @@
 #include <random>
 
 #include "cublas_v2.h"
+#ifndef LAYER_H
+#define LAYER_H
+
+
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
 void initialization(float* a, int size);
 
-class mLayer {
+class Layer {
 protected:
 	int l_prev, l_curr; // l_prev : neural number of previous layer, l : neural number of current layer
 	float* W;  // weights, matrix of size (l_curr, l_prev)
@@ -21,7 +25,7 @@ protected:
 			   // in backward pass, dL/dZ = dL/dA * dA/dZ
 	const float* A_prev; // activation from previous layer, book-keeping for backward pass
 public:
-	mLayer(int l1, int l2);
+	Layer(int l1, int l2);
 	float* forward(const float* X_in, int batch);
 	float* backward(const float* dA, int batch);
 	void gradientUpdate(float alpha);
@@ -37,12 +41,14 @@ protected:
 	void broadcast(float* c, const float* b, int l, int batch, bool row);
 };
 
-class mSoftmaxLayer : public mLayer {
+class SoftmaxLayer : public Layer {
 public:
-	mSoftmaxLayer(int l1, int l2);
+	SoftmaxLayer(int l1, int l2);
 	float* forward(const float* X_in, int batch);
 	float* backward(const float* Y, int batch);
 private:
 	void softmax(int numElements, float* Z);
 
 };
+
+#endif // !LAYER_H

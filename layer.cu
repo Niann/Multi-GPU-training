@@ -72,7 +72,7 @@ void printMatrix(float* a, int r, int c) {
 	}
 }
 
-class mLayer {
+class Layer {
 protected:
 	int l_prev, l_curr; // l_prev : neural number of previous layer, l : neural number of current layer
 	float* W;  // weights, matrix of size (l_curr, l_prev)
@@ -85,7 +85,7 @@ protected:
 	const float* A_prev; // activation from previous layer, book-keeping for backward pass
 
 public:
-	mLayer(int l1, int l2) {
+	Layer(int l1, int l2) {
 		l_prev = l1;
 		l_curr = l2;
 
@@ -364,10 +364,10 @@ protected:
 	}
 };
 
-class mSoftmaxLayer : public mLayer {
+class SoftmaxLayer : public Layer {
 
 public:
-	mSoftmaxLayer(int l1, int l2) : mLayer(l1, l2) {}
+	SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
 
 	float* forward(const float* X_in, int batch) {
 		// X_in input matrix, size (l_prev, batch_size), each column is a data point

@@ -1,4 +1,4 @@
-#include "model.cuh"
+#include "model.h"
 #include "mnist.h"
 
 #define IDX2C(i, j, ld) ((( i )*( ld ))+( j )) // ld - leading dimension
@@ -72,6 +72,15 @@ public:
 		for (int i = 0; i < this->layers.size(); i++) {
 			X = this->layers[i].forward(X, data.size());
 		}
+		int count = 0;
+		for (int i = 0; i < data.size(); i++) {
+			float* Y1 = X + i * this->out_size;
+			float* Y2 = X + (i + 1) * this->out_size;
+			if ((max_element(Y1, Y2) - Y1) == label[i]) {
+				count++;
+			}
+		}
+		cout << "accuracy: " << (float)count / (float)data.size() << endl;
 	}
 };
 
