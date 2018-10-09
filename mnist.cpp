@@ -43,7 +43,7 @@ void read_Mnist(string filename, vector<vector<float> > &vec)
 				{
 					unsigned char temp = 0;
 					file.read((char*)&temp, sizeof(temp));
-					tp.push_back((float)temp);
+					tp.push_back((float)temp/255);
 				}
 			}
 			vec.push_back(tp);

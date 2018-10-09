@@ -8,7 +8,7 @@ using namespace std;
 
 class Model {
 private:
-	vector<Layer> layers;
+	vector<Layer*> layers;
 	int batch_size;
 	int feature_size;
 	int out_size;
@@ -16,7 +16,7 @@ private:
 
 public:
 	Model(int in, int out, float lr, int batch_size, vector<int> layer_size);
-	void train(vector<vector<float>> data, vector<int> label);
+	void train(vector<vector<float>> data, vector<int> label, bool print);
 	void epoch(vector<vector<float>> &data, vector<int> &label);
 	float accuracy(vector<vector<float>> &data, vector<int> &label);
 

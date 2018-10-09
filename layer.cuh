@@ -5,11 +5,11 @@
 
 #include "cublas_v2.h"
 
-
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
 void initialization(float* a, int size);
+void printMatrix(float* a, int r, int c);
 
 class Layer {
 protected:
@@ -24,10 +24,11 @@ protected:
 	const float* A_prev; // activation from previous layer, book-keeping for backward pass
 public:
 	Layer(int l1, int l2);
-	float* forward(const float* X_in, int batch);
-	float* backward(const float* dA, int batch);
+	virtual float* forward(const float* X_in, int batch) = 0;
+	virtual float* backward(const float* dA, int batch) = 0;
 	void gradientUpdate(float alpha);
 	void freeMemory();
+	void printLayer();
 
 protected:
 	float* WX_b(const float* W, const float* X, const float* b, int m, int n, int k);
@@ -35,8 +36,16 @@ protected:
 	void reduceSum(float* A, float* b, int l, int batch, bool columnwise);
 	void elementwiseMul(int numElements, float* A, const float* B, bool invB);
 	void elementwiseAdd(int numElements, float* A, const float* B, float alpha);
-	void relu(int numElements, float* Z, float* dZ);
 	void broadcast(float* c, const float* b, int l, int batch, bool row);
+};
+
+class ReluLayer : public Layer {
+public:
+	ReluLayer(int l1, int l2);
+	float* forward(const float* X_in, int batch);
+	float* backward(const float* Y, int batch);
+private:
+	void relu(int numElements, float* Z, float* dZ);
 };
 
 class SoftmaxLayer : public Layer {
@@ -46,5 +55,4 @@ public:
 	float* backward(const float* Y, int batch);
 private:
 	void softmax(int numElements, float* Z);
-
 };

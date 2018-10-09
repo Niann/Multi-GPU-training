@@ -4,7 +4,7 @@ using namespace std;
 #define IDX2C(i, j, ld) ((( j )*( ld ))+( i )) // ld - leading dimension
 
 std::default_random_engine generator;
-std::normal_distribution<float> distribution(0.0, 0.5);
+std::normal_distribution<float> distribution(0.0, 0.005);
 
 void initialization(float* a, int size) {
 	for (int i = 0; i < size; i++) {
@@ -70,6 +70,7 @@ void printMatrix(float* a, int r, int c) {
 		}
 		printf("\n");
 	}
+	printf("\n");
 }
 
 
@@ -86,30 +87,44 @@ Layer::Layer(int l1, int l2) {
 	// initialize W and b
 	initialization(W, l1 * l2);
 	initialization(b, l2);
-	//printf("W matrix:\n");
-	//printMatrix(W, l_curr, l_prev);
-	//printf("b:\n");
-	//printMatrix(b, l_curr, 1);
 }
 
-float* Layer::forward(const float* X_in, int batch) {
+ReluLayer::ReluLayer(int l1, int l2) : Layer(l1, l2) {}
+
+SoftmaxLayer::SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
+
+float* ReluLayer::forward(const float* X_in, int batch) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
+	//printf("in relu\n");
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
-	//printf("Z:\n");
-	//printMatrix(X_out, l_curr, batch);
 
 	// allocate memory for dZ (gradient of activation) and perform activation
 	int numElements = l_curr * batch;
 	dZ = (float *)malloc(numElements * sizeof(float));
 	relu(numElements, X_out, dZ);
-	//printf("dZ:\n");
-	//printMatrix(dZ, l_curr, batch);
 
 	return X_out; // X_out = A = relu(Z)
 }
 
-float* Layer::backward(const float* dA, int batch) {
+float* SoftmaxLayer::forward(const float* X_in, int batch) {
+	// X_in input matrix, size (l_prev, batch_size), each column is a data point
+	//printf("in softmax\n");
+	A_prev = X_in; // save activation from previous layer for backprop
+	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
+
+	// allocate memory for dZ and perform activation
+	int numElements = l_curr * batch;
+	dZ = (float *)malloc(l_curr * batch * sizeof(float));
+	softmax(numElements, X_out);
+	dZ = X_out; // store for backprop
+
+	//printMatrix(X_out, l_curr, batch);
+
+	return X_out; // X_out = softmax(Z)
+}
+
+float* ReluLayer::backward(const float* dA, int batch) {
 	// dA input matrix, size (l_curr, batch_size), each column is gradient of a datapoint of current layer
 	// dA_prev output matrix
 	float* dA_prev;
@@ -135,15 +150,30 @@ float* Layer::backward(const float* dA, int batch) {
 	return dA_prev;
 }
 
+float* SoftmaxLayer::backward(const float* Y, int batch) {
+	// y - one-hot matrix of size (l_curr, batch)
+	// each column is a one_hot label for corresponding forward data
+	// dA_prev out_put matrix - gradient of activation from previous layer
+	float* dA_prev;
+	int numElements = l_prev * batch;
+	dA_prev = (float *)malloc(numElements * sizeof(float));
+
+	elementwiseAdd(l_curr * batch, dZ, Y, -1.0f);                                         // dZ = P - Y
+	//printf("dL/dZ:\n");
+	//printMatrix(dZ, l_curr, batch);
+
+	matrixMul(dZ, A_prev, dW, l_curr, l_prev, batch, false, true, 1 / (float)batch, 0.f); // dW = 1/m * dZ @ A_prev.T
+	reduceSum(dZ, db, l_curr, batch, false);                                              // db = 1/m * sum(dZ, axis=1)
+	matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);             // dA = W.T @ dZ
+
+	free(dZ);
+	return dA_prev;
+}
+
 void Layer::gradientUpdate(float alpha) {
 	// perform parameter update w.r.t to gradient direction with learning rate alpha
 	elementwiseAdd(l_curr * l_prev, W, dW, -alpha);
 	elementwiseAdd(l_curr, b, db, -alpha);
-
-	//printf("W matrix:\n");
-	//printMatrix(W, l_curr, l_prev);
-	//printf("b:\n");
-	//printMatrix(b, l_curr, 1);
 }
 
 void Layer::freeMemory() {
@@ -153,6 +183,11 @@ void Layer::freeMemory() {
 	free(b);
 	free(db);
 	free((float*)A_prev);
+}
+
+void Layer::printLayer() {
+	printMatrix(W, l_curr, l_prev);
+	printMatrix(b, l_curr, 1);
 }
 
 
@@ -303,31 +338,6 @@ void Layer::elementwiseAdd(int numElements, float* A, const float* B, float alph
 	cudaFree(d_B); // free device memory
 }
 
-void Layer::relu(int numElements, float* Z, float* dZ) {
-	// perform relu activation and calculate gradients simultaneously
-	unsigned int mem_size = numElements * sizeof(*Z);
-
-	float * d_Z;  // d_Z  - Z on the device
-	float * d_dZ; // d_dZ - dZ on the device
-
-	cudaMalloc((void **)& d_Z, mem_size);  // device
-	cudaMalloc((void **)& d_dZ, mem_size); // device
-
-	// copy Z from host to device
-	cudaMemcpy(d_Z, Z, mem_size, cudaMemcpyHostToDevice); // Z -> d_Z
-
-	int threadsPerBlock = 256;
-	int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
-	reluHelper <<<blocksPerGrid, threadsPerBlock >> > (d_Z, d_dZ, numElements);
-
-	// copy Z from device to host
-	cudaMemcpy(Z, d_Z, mem_size, cudaMemcpyDeviceToHost);   // d_Z  -> Z (A)
-	cudaMemcpy(dZ, d_dZ, mem_size, cudaMemcpyDeviceToHost); // d_dZ -> dZ
-
-	cudaFree(d_Z);  // free device memory
-	cudaFree(d_dZ); // free device memory
-}
-
 void Layer::broadcast(float* c, const float* b, int l, int batch, bool row) {
 	// broadcast bias in a batch
 	// c - output matrix of size (l, batch_size)
@@ -351,98 +361,78 @@ void Layer::broadcast(float* c, const float* b, int l, int batch, bool row) {
 	//printMatrix(c, l, batch);
 }
 
+void ReluLayer::relu(int numElements, float* Z, float* dZ) {
+	// perform relu activation and calculate gradients simultaneously
+	unsigned int mem_size = numElements * sizeof(*Z);
 
+	float * d_Z;  // d_Z  - Z on the device
+	float * d_dZ; // d_dZ - dZ on the device
 
+	cudaMalloc((void **)& d_Z, mem_size);  // device
+	cudaMalloc((void **)& d_dZ, mem_size); // device
 
+	// copy Z from host to device
+	cudaMemcpy(d_Z, Z, mem_size, cudaMemcpyHostToDevice); // Z -> d_Z
 
-	SoftmaxLayer::SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
+	reluHelper << <blocksPerGrid, threadsPerBlock >> > (d_Z, d_dZ, numElements);
 
-	float* SoftmaxLayer::forward(const float* X_in, int batch) {
-		// X_in input matrix, size (l_prev, batch_size), each column is a data point
-		A_prev = X_in; // save activation from previous layer for backprop
-		float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
-		//printf("Z:\n");
-		//printMatrix(X_out, l_curr, batch);
+	// copy Z from device to host
+	cudaMemcpy(Z, d_Z, mem_size, cudaMemcpyDeviceToHost);   // d_Z  -> Z (A)
+	cudaMemcpy(dZ, d_dZ, mem_size, cudaMemcpyDeviceToHost); // d_dZ -> dZ
 
-		// allocate memory for P (prob matrix) and perform activation
-		int numElements = l_curr * batch;
-		dZ = (float *)malloc(l_curr * batch * sizeof(float));
-		softmax(numElements, X_out);
-		dZ = X_out; // store for backprop
+	cudaFree(d_Z);  // free device memory
+	cudaFree(d_dZ); // free device memory
+}
 
-		return X_out; // X_out = softmax(Z)
-	}
+void SoftmaxLayer::softmax(int numElements, float* Z) {
+	// softmax operation over each coloum of Z
+	// store gradients in dZ
+	// 1st x = exp(x) for each element x in Z
+	// 2nd p = sum(x) for each column in Z
+	// 3rd x = x/p for each element each column in Z
+	float* d_Z;
+	int batch = numElements / l_curr;
+	unsigned int mem_size = numElements * sizeof(*Z);
 
-	float* SoftmaxLayer::backward(const float* Y, int batch) {
-		// y - one-hot matrix of size (l_curr, batch)
-		// each column is a one_hot label for corresponding forward data
-		// dA_prev out_put matrix - gradient of activation from previous layer
-		float* dA_prev;
-		int numElements = l_prev * batch;
-		dA_prev = (float *)malloc(numElements * sizeof(float));
+	// allocate memory for Z on device
+	cudaMalloc((void **)& d_Z, mem_size);
+	cudaMemcpy(d_Z, Z, mem_size, cudaMemcpyHostToDevice); // Z -> d_Z
 
-		// allocate memory for dZ
+	// 1st x = exp(x) for each element x in Z
+	int threadsPerBlock = 256;
+	int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
+	expHelper <<<blocksPerGrid, threadsPerBlock >> > (d_Z, numElements);
 
-		elementwiseAdd(l_curr * batch, dZ, Y, -1.0f);                                         // dZ = P - Y
-		//printf("dL/dZ:\n");
-		//printMatrix(dZ, l_curr, batch);
+	cudaMemcpy(Z, d_Z, mem_size, cudaMemcpyDeviceToHost);   // d_Z  -> Z
+	cudaFree(d_Z);  // free device memory
+	//printf("exp:\n");
+	//printMatrix(Z, l_curr, batch);
 
-		matrixMul(dZ, A_prev, dW, l_curr, l_prev, batch, false, true, 1 / (float)batch, 0.f); // dW = 1/m * dZ @ A_prev.T
-		reduceSum(dZ, db, l_curr, batch, false);                                              // db = 1/m * sum(dZ, axis=1)
-		matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);             // dA = W.T @ dZ
+	// 2nd p = sum(x) for each column in Z
+	float* p; // vector length batch_size
+	p = (float *)malloc(batch * sizeof(float));
+	reduceSum(Z, p, l_curr, batch, true);
+	//printf("p:\n");
+	//printMatrix(p, batch, 1);
 
-		free(dZ);
-		return dA_prev;
-	}
-
-
-	void SoftmaxLayer::softmax(int numElements, float* Z) {
-		// softmax operation over each coloum of Z
-		// store gradients in dZ
-		// 1st x = exp(x) for each element x in Z
-		// 2nd p = sum(x) for each column in Z
-		// 3rd x = x/p for each element each column in Z
-		float* d_Z;
-		int batch = numElements / l_curr;
-		unsigned int mem_size = numElements * sizeof(*Z);
-
-		// allocate memory for Z on device
-		cudaMalloc((void **)& d_Z, mem_size);
-		cudaMemcpy(d_Z, Z, mem_size, cudaMemcpyHostToDevice); // Z -> d_Z
-
-		// 1st x = exp(x) for each element x in Z
-		int threadsPerBlock = 256;
-		int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
-		expHelper <<<blocksPerGrid, threadsPerBlock >> > (d_Z, numElements);
-
-		cudaMemcpy(Z, d_Z, mem_size, cudaMemcpyDeviceToHost);   // d_Z  -> Z
-		cudaFree(d_Z);  // free device memory
-		//printf("exp:\n");
-		//printMatrix(Z, l_curr, batch);
-
-		// 2nd p = sum(x) for each column in Z
-		float* p; // vector length batch_size
-		p = (float *)malloc(batch * sizeof(float));
-		reduceSum(Z, p, l_curr, batch, true);
-		//printf("p:\n");
-		//printMatrix(p, batch, 1);
-
-		// 3rd x = x/p for each element each column in Z
-		float * P; // probability matrix of size (l_curr, batch)
-		P = (float *)malloc(numElements * sizeof(float));
-		broadcast(P, p, l_curr, batch, false);
-		elementwiseMul(numElements, Z, P, true);
-		free(p);
-		free(P);
-	}
+	// 3rd x = x/p for each element each column in Z
+	float * P; // probability matrix of size (l_curr, batch)
+	P = (float *)malloc(numElements * sizeof(float));
+	broadcast(P, p, l_curr, batch, false);
+	elementwiseMul(numElements, Z, P, true);
+	free(p);
+	free(P);
+}
 
 
 /*
 int main() {
 	int batch = 5;
-	int feature = 4;
-	int l1 = 3;
-	int l2 = 2;
+	int feature = 728;
+	int l1 = 200;
+	int l2 = 10;
 
 	float* X;
 	float* Y;
@@ -454,13 +444,13 @@ int main() {
 	printf("input matrix:\n");
 	printMatrix(X, feature, batch);
 
-	Layer l = Layer(feature, l1);
-	SoftmaxLayer s = SoftmaxLayer(l1, l2);
-	float* X1 = l.forward(X, batch);
+	Layer* l = &ReluLayer(feature, l1);
+	Layer* s = &SoftmaxLayer(l1, l2);
+	float* X1 = l->forward(X, batch);
 	printf("output matrix:\n");
 	printMatrix(X1, l1, batch);
 
-	float* X2 = s.forward(X1, batch);
+	float* X2 = s->forward(X1, batch);
 	printf("output matrix:\n");
 	printMatrix(X2, l2, batch);
 
@@ -468,20 +458,19 @@ int main() {
 	printf("input matrix:\n");
 	printMatrix(Y, l2, batch);
 
-	float* dA1 = s.backward(Y, batch);
+	float* dA1 = s->backward(Y, batch);
 	printf("output matrix:\n");
 	printMatrix(dA1, l1, batch);
 
-	float* dA0 = l.backward(dA1, batch);
+	float* dA0 = l->backward(dA1, batch);
 	printf("output matrix:\n");
 	printMatrix(dA0, feature, batch);
 
 	printf("\ngradient update\n");
-	s.gradientUpdate(1);
-	l.gradientUpdate(1);
+	s->gradientUpdate(1);
+	l->gradientUpdate(1);
 
-	s.freeMemory();
-	l.freeMemory();
+	s->freeMemory();
+	l->freeMemory();
 	free(Y);
-}
-*/
+}*/
