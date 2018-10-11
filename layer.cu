@@ -95,7 +95,6 @@ SoftmaxLayer::SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
 
 float* ReluLayer::forward(const float* X_in, int batch) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
-	//printf("in relu\n");
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
 
@@ -109,7 +108,6 @@ float* ReluLayer::forward(const float* X_in, int batch) {
 
 float* SoftmaxLayer::forward(const float* X_in, int batch) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
-	//printf("in softmax\n");
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
 
@@ -133,18 +131,9 @@ float* ReluLayer::backward(const float* dA, int batch) {
 
 	// calculate dZ, dW, db, dA_prev
 	elementwiseMul(l_curr * batch, dZ, dA, false);                                        // dZ = dL/dA * dA/dZ
-	//printf("dZ:\n");
-	//printMatrix(dZ, l_curr, batch);
-
 	matrixMul(dZ, A_prev, dW, l_curr, l_prev, batch, false, true, 1 / (float)batch, 0.f); // dW = dL/dZ * dZ/dW = 1/m * dZ @ A_prev.T
-	//printf("dW:\n");
-	//printMatrix(dW, l_curr, l_prev);
-
 	reduceSum(dZ, db, l_curr, batch, false);                                              // db = dL/dZ * dZ/db = 1/m * sum(dZ, axis=1)
-	//printf("db:\n");
-	//printMatrix(db, l_curr, 1);
-
-	matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);      // dA_prev = dL/dZ * dZ/dA_prev = W.T @ dZ
+	matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);             // dA_prev = dL/dZ * dZ/dA_prev = W.T @ dZ
 
 	free(dZ);
 	return dA_prev;
@@ -159,9 +148,6 @@ float* SoftmaxLayer::backward(const float* Y, int batch) {
 	dA_prev = (float *)malloc(numElements * sizeof(float));
 
 	elementwiseAdd(l_curr * batch, dZ, Y, -1.0f);                                         // dZ = P - Y
-	//printf("dL/dZ:\n");
-	//printMatrix(dZ, l_curr, batch);
-
 	matrixMul(dZ, A_prev, dW, l_curr, l_prev, batch, false, true, 1 / (float)batch, 0.f); // dW = 1/m * dZ @ A_prev.T
 	reduceSum(dZ, db, l_curr, batch, false);                                              // db = 1/m * sum(dZ, axis=1)
 	matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);             // dA = W.T @ dZ

@@ -17,7 +17,7 @@ Model::Model(int in, int out, float lr, int batch_size, vector<int> layer_size) 
 	}
 	layers.push_back(new SoftmaxLayer(layer_size.back(), out));
 
-	X = (float *)malloc(batch_size * feature_size * sizeof(float));
+	X = (float *)malloc(batch_size * in * sizeof(float));
 	Y = (float *)malloc(batch_size * out * sizeof(float));
 
 	cout << "layer number: " << layers.size() << endl;
@@ -29,7 +29,7 @@ void Model::train(vector<vector<float>> data,vector<int> label) {
 		cout << "data error! \n";
 		return;
 	}
-
+	
 	for (int i = 0; i < data.size(); i++) {
 		for (int j = 0; j < this->feature_size; j++) {
 			X[IDX2C(j, i, this->feature_size)] = data[i][j];
@@ -43,13 +43,16 @@ void Model::train(vector<vector<float>> data,vector<int> label) {
 		Y[IDX2C(label[i], i, this->out_size)] = 1;
 	}
 
+	float* X_in = X;
 	for (int i = 0; i < this->layers.size(); i++) {
-		X = layers[i]->forward(X, data.size());
+		X_in = layers[i]->forward(X_in, data.size());
 	}
 
+	float* Y_in = Y;
 	for (int i = this->layers.size()-1; i >=0 ; i--) {
-		Y = layers[i]->backward(Y, data.size());
+		Y_in = layers[i]->backward(Y_in, data.size());
 	}
+
 	for (int i = 0; i < this->layers.size(); i++) {
 		layers[i]->gradientUpdate(this->learning_rate);
 	}
@@ -106,17 +109,17 @@ int main() {
 	//read MNIST iamge into float vector
 	vector<vector<float>> train_X;
 	vector<vector<float>> test_X;
-	read_Mnist(Xtrain_file, train_X);
+	//read_Mnist(Xtrain_file, train_X);
 	read_Mnist(Xtest_file, test_X);
-	cout << "training set size: " << train_X.size() << endl;
+	//cout << "training set size: " << train_X.size() << endl;
 	cout << "test set size: " << test_X.size() << endl;
 
 	//read MNIST label into int vector
 	vector<int> train_y(train_X.size());
 	vector<int> test_y(test_X.size());
-	read_Mnist_Label(Ytrain_file, train_y);
+	//read_Mnist_Label(Ytrain_file, train_y);
 	read_Mnist_Label(Ytest_file, test_y);
-	cout << train_y.size() << endl;
+	//cout << train_y.size() << endl;
 	cout << test_y.size() << endl;
 	cout << "data loaded" << endl;
 
@@ -128,7 +131,8 @@ int main() {
 	Model* model = new Model(image_size, 10, 0.1f, 64, layers);
 	for (int i = 0; i < 10; i++) {
 		cout << "start for epoch: " << i << endl;
-		model->epoch(train_X, train_y);
+		//model->epoch(train_X, train_y);
+		model->epoch(test_X, test_y);
 		model->accuracy(test_X, test_y);
 	}
 	t = clock() - t;
