@@ -9,14 +9,15 @@
 #include <device_launch_parameters.h>
 
 void initialization(float* a, int size);
-void printMatrix(float* a, int r, int c);
+void printMatrix(const float* a, int r, int c);
+void printGPUMatrix(const float* a, int r, int c);
 
 class Layer {
 protected:
 	int l_prev, l_curr; // l_prev : neural number of previous layer, l : neural number of current layer
-	float* W;  // weights, matrix of size (l_curr, l_prev)
+	float* W;  // weights, matrix of size (l_curr, l_prev), pointer on gpu
 	float* dW; // W gradients
-	float* b;  // bias, vector of size (l_curr,)
+	float* b;  // bias, vector of size (l_curr,), pointer on gpu
 	float* db; // b gradients
 	float* dZ; // gradient of activation
 			   // in forward pass, store dA/dZ
@@ -26,17 +27,17 @@ public:
 	Layer(int l1, int l2);
 	virtual float* forward(const float* X_in, int batch) = 0;
 	virtual float* backward(const float* dA, int batch) = 0;
-	void gradientUpdate(float alpha);
+	void SGDUpdate(float alpha);
 	void freeMemory();
-	void printLayer();
 
 protected:
-	float* WX_b(const float* W, const float* X, const float* b, int m, int n, int k);
+	float* WX_b(const float* W, const float* X, float* b, int m, int n, int k);
 	void matrixMul(const float* A, const float* B, float* C, int m, int n, int k, bool transA, bool transB, float alpha, float beta);
 	void reduceSum(float* A, float* b, int l, int batch, bool columnwise);
 	void elementwiseMul(int numElements, float* A, const float* B, bool invB);
 	void elementwiseAdd(int numElements, float* A, const float* B, float alpha);
-	void broadcast(float* c, const float* b, int l, int batch, bool row);
+	void elementwiseExp(float* A, int numElements);
+	void broadcast(float* A, float* b, int r, int c, bool row);
 };
 
 class ReluLayer : public Layer {

@@ -15,6 +15,8 @@ private:
 	float learning_rate;
 	float* X; // place holder for X
 	float* Y; // place holder for Y
+	float* d_X; // X on device
+	float* d_Y; // Y on device
 
 public:
 	Model(int in, int out, float lr, int batch_size, vector<int> layer_size);
