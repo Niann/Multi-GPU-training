@@ -121,7 +121,7 @@ ReluLayer::ReluLayer(int l1, int l2) : Layer(l1, l2) {}
 
 SoftmaxLayer::SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
 
-float* ReluLayer::forward(const float* X_in, int batch) {
+float* ReluLayer::forward(float* X_in, int batch) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
@@ -134,21 +134,20 @@ float* ReluLayer::forward(const float* X_in, int batch) {
 	return X_out; // X_out = A = relu(Z)
 }
 
-float* SoftmaxLayer::forward(const float* X_in, int batch) {
+float* SoftmaxLayer::forward(float* X_in, int batch) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
 
 	// allocate memory for dZ and perform activation
 	int numElements = l_curr * batch;
-	cudaMalloc((void **)& dZ, numElements * sizeof(float));
 	softmax(numElements, X_out);
 	dZ = X_out; // store for backprop
 
 	return X_out; // X_out = softmax(Z)
 }
 
-float* ReluLayer::backward(const float* dA, int batch) {
+float* ReluLayer::backward(float* dA, int batch) {
 	// dA input matrix, size (l_curr, batch_size), each column is gradient of a datapoint of current layer
 	// dA_prev output matrix
 	float* dA_prev;
@@ -161,11 +160,12 @@ float* ReluLayer::backward(const float* dA, int batch) {
 	reduceSum(dZ, db, l_curr, batch, false);                                              // db = dL/dZ * dZ/db = 1/m * sum(dZ, axis=1)
 	matrixMul(W, dZ, dA_prev, l_prev, batch, l_curr, true, false, 1.0f, 0.f);             // dA_prev = dL/dZ * dZ/dA_prev = W.T @ dZ
 
+	cudaFree(dA);
 	cudaFree(dZ);
 	return dA_prev;
 }
 
-float* SoftmaxLayer::backward(const float* Y, int batch) {
+float* SoftmaxLayer::backward(float* Y, int batch) {
 	// y - one-hot matrix of size (l_curr, batch)
 	// each column is a one_hot label for corresponding forward data
 	// dA_prev out_put matrix - gradient of activation from previous layer
@@ -195,7 +195,7 @@ void Layer::freeMemory() {
 	cudaFree(dW);
 	cudaFree(b);
 	cudaFree(db);
-	cudaFree((float*)A_prev);
+	cudaFree(A_prev);
 }
 
 

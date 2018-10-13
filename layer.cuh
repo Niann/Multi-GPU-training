@@ -22,11 +22,11 @@ protected:
 	float* dZ; // gradient of activation
 			   // in forward pass, store dA/dZ
 			   // in backward pass, dL/dZ = dL/dA * dA/dZ
-	const float* A_prev; // activation from previous layer, book-keeping for backward pass
+	float* A_prev; // activation from previous layer, book-keeping for backward pass
 public:
 	Layer(int l1, int l2);
-	virtual float* forward(const float* X_in, int batch) = 0;
-	virtual float* backward(const float* dA, int batch) = 0;
+	virtual float* forward(float* X_in, int batch) = 0;
+	virtual float* backward(float* dA, int batch) = 0;
 	void SGDUpdate(float alpha);
 	void freeMemory();
 
@@ -43,8 +43,8 @@ protected:
 class ReluLayer : public Layer {
 public:
 	ReluLayer(int l1, int l2);
-	float* forward(const float* X_in, int batch);
-	float* backward(const float* Y, int batch);
+	float* forward(float* X_in, int batch);
+	float* backward(float* dA, int batch);
 private:
 	void relu(int numElements, float* Z, float* dZ);
 };
@@ -52,8 +52,8 @@ private:
 class SoftmaxLayer : public Layer {
 public:
 	SoftmaxLayer(int l1, int l2);
-	float* forward(const float* X_in, int batch);
-	float* backward(const float* Y, int batch);
+	float* forward(float* X_in, int batch);
+	float* backward(float* Y, int batch);
 private:
 	void softmax(int numElements, float* Z);
 };

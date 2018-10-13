@@ -63,6 +63,7 @@ void Model::train(vector<vector<float>> data,vector<int> label) {
 	for (int i = this->layers.size()-1; i >=0 ; i--) {
 		Y_in = layers[i]->backward(Y_in, batch_size);
 	}
+	cudaFree(Y_in);
 
 	// parameter update
 	for (int i = 0; i < this->layers.size(); i++) {
