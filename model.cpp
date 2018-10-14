@@ -7,7 +7,7 @@
 #define INPUT_SIZE 784
 #define LABEL_SIZE 10
 #define BATCH_SIZE 64
-#define EPOCH 10
+#define EPOCH 1
 
 Model::Model(int in, int out, float lr, int batch_size, vector<int> layer_size) {
 	this->feature_size = in;
@@ -86,7 +86,6 @@ void Model::epoch(vector<vector<float>> &data, vector<int> &label) {
 }
 
 float Model::accuracy(vector<vector<float>> &data,vector<int> &label) {
-
 	float* X_test = (float *)malloc(data.size() * feature_size * sizeof(float));
 	for (int i = 0; i < data.size(); i++) {
 		for (int j = 0; j < feature_size; j++) {
@@ -120,6 +119,15 @@ float Model::accuracy(vector<vector<float>> &data,vector<int> &label) {
 	float acc = (float)count / (float)data.size();
 	cout << "accuracy: " << acc << endl;
 	return acc;
+}
+
+void Model::freeMemory() {
+	for (int i = 0; i < this->layers.size(); i++) {
+		this->layers[i]->freeMemory();
+		delete this->layers[i];
+	}
+	cudaFree(X);
+	cudaFree(Y);
 }
 
 int main() {
@@ -158,7 +166,8 @@ int main() {
 	}
 	t = clock() - t;
 	float time = (float)t / CLOCKS_PER_SEC;
-	cout << "time consuming: " << time << "seconds" << endl;
+	cout << "time consuming: " << time << " seconds" << endl;
+	model->freeMemory();
 
 	return 0;
 }

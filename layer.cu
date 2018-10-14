@@ -195,7 +195,6 @@ void Layer::freeMemory() {
 	cudaFree(dW);
 	cudaFree(b);
 	cudaFree(db);
-	cudaFree(A_prev);
 }
 
 

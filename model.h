@@ -23,5 +23,5 @@ public:
 	void train(vector<vector<float>> data, vector<int> label);
 	void epoch(vector<vector<float>> &data, vector<int> &label);
 	float accuracy(vector<vector<float>> &data, vector<int> &label);
-
+	void freeMemory();
 };
