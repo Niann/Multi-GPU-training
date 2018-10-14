@@ -1,13 +1,14 @@
 #include "layer.cuh"
 
-using namespace std;
 #define IDX2C(i, j, ld) ((( j )*( ld ))+( i )) // ld - leading dimension
 
-std::default_random_engine generator;
-std::normal_distribution<float> distribution(0.0f, 0.005f);
-
 void initialization(float* a, int size) {
+	std::default_random_engine generator;
+	std::normal_distribution<float> distribution(0.0f, 0.005f);
 	for (int i = 0; i < size; i++) {
+		// use a universal hash function
+		// guarantee that same size of input has same initial value
+		generator.seed(((i * 233 + 66666699) % 433494437) % (size * 10));
 		a[i] = distribution(generator);
 	}
 }
@@ -48,7 +49,6 @@ __global__ void reluHelper(float* Z, float* dZ, int numElements) {
 		}
 	}
 }
-
 
 __global__ void broadcastHelper(float* A, const float* b, int r, int c, bool row) {
 	// broadcast b to A by row/column
@@ -96,9 +96,23 @@ __global__ void elementAddHelper(float* A, const float* B, float alpha, int numE
 	}
 }
 
-Layer::Layer(int l1, int l2) {
+__global__ void elementAvgHelper(float* dest, float* src, int numElements, int copy) {
+	// element-wise average
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < numElements) {
+		float temp = 0;
+		for (int j = 0; j < copy; j++) {
+			temp += src[numElements * j + i];
+		}
+		dest[i] = temp / copy;
+	}
+}
+
+Layer::Layer(int l1, int l2, int gpu) {
 	l_prev = l1;
 	l_curr = l2;
+	gpuNum = gpu;
 
 	// allocate memory
 	float* h_W = (float *)malloc(l1 * l2 * sizeof(float));
@@ -117,9 +131,9 @@ Layer::Layer(int l1, int l2) {
 	free(h_b);
 }
 
-ReluLayer::ReluLayer(int l1, int l2) : Layer(l1, l2) {}
+ReluLayer::ReluLayer(int l1, int l2, int gpu) : Layer(l1, l2, gpu) {}
 
-SoftmaxLayer::SoftmaxLayer(int l1, int l2) : Layer(l1, l2) {}
+SoftmaxLayer::SoftmaxLayer(int l1, int l2, int gpu) : Layer(l1, l2, gpu) {}
 
 float* ReluLayer::forward(float* X_in, int batch) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
@@ -185,8 +199,27 @@ float* SoftmaxLayer::backward(float* Y, int batch) {
 
 void Layer::SGDUpdate(float alpha) {
 	// perform parameter update w.r.t to gradient direction with learning rate alpha
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	// allocate gpu memory for dW and db on all devices
+	float* all_dW;
+	float* all_db;
+	cudaMalloc((void **)& all_dW, l_prev * l_curr * gpuNum* sizeof(float));
+	cudaMalloc((void **)& all_db, l_curr * gpuNum * sizeof(float));
+
+	// synchonize gradients from all devices
+	MPI_Allgather(dW, l_prev * l_curr, MPI_FLOAT, all_dW, l_prev * l_curr, MPI_FLOAT, MPI_COMM_WORLD);
+	MPI_Allgather(db, l_curr, MPI_FLOAT, all_db, l_curr, MPI_FLOAT, MPI_COMM_WORLD);
+
+	// calculate mean of all_dW and all_db and store in dW and db
+	averageGradients(dW, all_dW, db, all_db);
+
+	// update parameters
 	elementwiseAdd(l_curr * l_prev, W, dW, -alpha);
 	elementwiseAdd(l_curr, b, db, -alpha);
+
+	cudaFree(all_dW);
+	cudaFree(all_db);
 }
 
 void Layer::freeMemory() {
@@ -277,6 +310,7 @@ void Layer::reduceSum(float* A, float* b, int l, int batch, bool columnwise) {
 		matrixMul(A, d_x, b, l, 1, batch, false, false, alpha, 0.f);
 	}
 	free(x);
+	cudaFree(d_x);
 }
 
 void Layer::elementwiseMul(int numElements, float* A, const float* B, bool invB) {
@@ -307,6 +341,19 @@ void Layer::broadcast(float* A, float* b, int r, int c, bool row) {
 	int threadsPerBlock = 256;
 	int blocksPerGrid = (r * c + threadsPerBlock - 1) / threadsPerBlock;
 	broadcastHelper<<<blocksPerGrid, threadsPerBlock>>>(A, b, r, c, row);
+}
+
+void Layer::averageGradients(float* dW, float* all_dW, float* db, float* all_db) {
+	// average dW and db
+	int threadsPerBlock = 256;
+
+	int numElements_W = l_curr * l_prev;
+	int blocksPerGrid_W = (numElements_W + threadsPerBlock - 1) / threadsPerBlock;
+	elementAvgHelper<<<blocksPerGrid_W, threadsPerBlock>>>(dW, all_dW, numElements_W, gpuNum);
+
+	int numElements_b = l_curr;
+	int blocksPerGrid_b = (numElements_b + threadsPerBlock - 1) / threadsPerBlock;
+	elementAvgHelper<<<blocksPerGrid_b, threadsPerBlock>>>(db, all_db, numElements_b, gpuNum);
 }
 
 void ReluLayer::relu(int numElements, float* Z, float* dZ) {

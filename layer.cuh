@@ -2,9 +2,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <random>
+#include <mpi.h>
 
 #include "cublas_v2.h"
-
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
@@ -14,6 +14,7 @@ void printGPUMatrix(const float* a, int r, int c);
 
 class Layer {
 protected:
+	int gpuNum;
 	int l_prev, l_curr; // l_prev : neural number of previous layer, l : neural number of current layer
 	float* W;  // weights, matrix of size (l_curr, l_prev), pointer on gpu
 	float* dW; // W gradients
@@ -24,7 +25,7 @@ protected:
 			   // in backward pass, dL/dZ = dL/dA * dA/dZ
 	float* A_prev; // activation from previous layer, book-keeping for backward pass
 public:
-	Layer(int l1, int l2);
+	Layer(int l1, int l2, int gpu);
 	virtual float* forward(float* X_in, int batch) = 0;
 	virtual float* backward(float* dA, int batch) = 0;
 	void SGDUpdate(float alpha);
@@ -38,11 +39,12 @@ protected:
 	void elementwiseAdd(int numElements, float* A, const float* B, float alpha);
 	void elementwiseExp(float* A, int numElements);
 	void broadcast(float* A, float* b, int r, int c, bool row);
+	void averageGradients(float* dW, float* all_dW, float* db, float* all_db);
 };
 
 class ReluLayer : public Layer {
 public:
-	ReluLayer(int l1, int l2);
+	ReluLayer(int l1, int l2, int gpu);
 	float* forward(float* X_in, int batch);
 	float* backward(float* dA, int batch);
 private:
@@ -51,7 +53,7 @@ private:
 
 class SoftmaxLayer : public Layer {
 public:
-	SoftmaxLayer(int l1, int l2);
+	SoftmaxLayer(int l1, int l2, int gpu);
 	float* forward(float* X_in, int batch);
 	float* backward(float* Y, int batch);
 private:

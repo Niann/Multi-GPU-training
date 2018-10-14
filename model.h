@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <mpi.h>
 
 using namespace std;
 
@@ -19,7 +20,7 @@ private:
 	float* d_Y; // Y on device
 
 public:
-	Model(int in, int out, float lr, int batch_size, vector<int> layer_size);
+	Model(int in, int out, float lr, int batch_size, vector<int> layer_size, int gpu);
 	void train(vector<vector<float>> data, vector<int> label);
 	void epoch(vector<vector<float>> &data, vector<int> &label);
 	float accuracy(vector<vector<float>> &data, vector<int> &label);

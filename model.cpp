@@ -9,17 +9,17 @@
 #define BATCH_SIZE 64
 #define EPOCH 1
 
-Model::Model(int in, int out, float lr, int batch_size, vector<int> layer_size) {
+Model::Model(int in, int out, float lr, int batch_size, vector<int> layer_size, int gpu) {
 	this->feature_size = in;
 	this->out_size = out;
 	this->batch_size = batch_size;
 	this->learning_rate = lr;
 
-	layers.push_back(new ReluLayer(in, layer_size[0]));
+	layers.push_back(new ReluLayer(in, layer_size[0], gpu));
 	for (int i = 0; i < layer_size.size() - 1; i++) {
-		layers.push_back(new ReluLayer(layer_size[i], layer_size[i+1]));
+		layers.push_back(new ReluLayer(layer_size[i], layer_size[i+1], gpu));
 	}
-	layers.push_back(new SoftmaxLayer(layer_size.back(), out));
+	layers.push_back(new SoftmaxLayer(layer_size.back(), out, gpu));
 
 	// allocate memory for place holders
 	X = (float *)malloc(batch_size * in * sizeof(float));
@@ -80,7 +80,7 @@ void Model::epoch(vector<vector<float>> &data, vector<int> &label) {
 			batch_label.push_back(label[i + j]);
 		}
 		this->train(batch_data, batch_label);
-		cout << i/this->batch_size <<" of "<<data.size()/this->batch_size<< "\r";
+		//cout << i/this->batch_size <<" of "<<data.size()/this->batch_size<< "\r";
 	}
 	cout << "epoch done" << endl;
 }
@@ -130,7 +130,14 @@ void Model::freeMemory() {
 	cudaFree(Y);
 }
 
-int main() {
+int main(int argc, char **argv) {
+	int comm_size;
+	int my_rank;
+
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
 	string Xtrain_file = "train-images-idx3-ubyte";
 	string Ytrain_file = "train-labels-idx1-ubyte";
 	string Xtest_file = "t10k-images-idx3-ubyte";
@@ -157,7 +164,7 @@ int main() {
 	layers.push_back(300);
 
 	clock_t t = clock();
-	Model* model = new Model(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers);
+	Model* model = new Model(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers, comm_size);
 	for (int i = 0; i < EPOCH; i++) {
 		cout << "start for epoch: " << i << endl;
 		model->epoch(train_X, train_y);
@@ -168,6 +175,7 @@ int main() {
 	float time = (float)t / CLOCKS_PER_SEC;
 	cout << "time consuming: " << time << " seconds" << endl;
 	model->freeMemory();
+	MPI_Finalize();
 
 	return 0;
 }
