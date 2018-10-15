@@ -17,7 +17,7 @@ int ReverseInt(int i)
 	return((int)ch1 << 24) + ((int)ch2 << 16) + ((int)ch3 << 8) + ch4;
 }
 
-void read_Mnist(string filename, vector<vector<float> > &vec)
+void read_Mnist(string filename, vector<vector<float>> &vec, int rank, int comm_size)
 {
 	ifstream file(filename, ios::binary);
 	if (file.is_open())
@@ -46,12 +46,14 @@ void read_Mnist(string filename, vector<vector<float> > &vec)
 					tp.push_back((float)temp/255);
 				}
 			}
-			vec.push_back(tp);
+			if (i % comm_size == rank) {
+				vec.push_back(tp);
+			}
 		}
 	}
 }
 
-void read_Mnist_Label(string filename, vector<int> &vec)
+void read_Mnist_Label(string filename, vector<int> &vec, int rank, int comm_size)
 {
 	ifstream file(filename, ios::binary);
 	if (file.is_open())
@@ -68,7 +70,10 @@ void read_Mnist_Label(string filename, vector<int> &vec)
 		{
 			unsigned char temp = 0;
 			file.read((char*)&temp, sizeof(temp));
-			vec[i] = (int)temp;
+
+			if (i % comm_size == rank) {
+				vec.push_back((int)temp);
+			}
 		}
 	}
 }

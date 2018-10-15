@@ -7,7 +7,7 @@
 #define INPUT_SIZE 784
 #define LABEL_SIZE 10
 #define BATCH_SIZE 64
-#define EPOCH 1
+#define EPOCH 10
 
 Model::Model(int in, int out, float lr, int batch_size, vector<int> layer_size, int gpu) {
 	this->feature_size = in;
@@ -132,11 +132,11 @@ void Model::freeMemory() {
 
 int main(int argc, char **argv) {
 	int comm_size;
-	int my_rank;
+	int rank;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
 	string Xtrain_file = "train-images-idx3-ubyte";
 	string Ytrain_file = "train-labels-idx1-ubyte";
@@ -146,16 +146,16 @@ int main(int argc, char **argv) {
 	//read MNIST iamge into float vector
 	vector<vector<float>> train_X;
 	vector<vector<float>> test_X;
-	read_Mnist(Xtrain_file, train_X);
-	read_Mnist(Xtest_file, test_X);
+	read_Mnist(Xtrain_file, train_X, rank, comm_size);
+	read_Mnist(Xtest_file, test_X, rank, comm_size);
 	cout << "training set size: " << train_X.size() << endl;
 	cout << "test set size: " << test_X.size() << endl;
 
 	//read MNIST label into int vector
-	vector<int> train_y(train_X.size());
-	vector<int> test_y(test_X.size());
-	read_Mnist_Label(Ytrain_file, train_y);
-	read_Mnist_Label(Ytest_file, test_y);
+	vector<int> train_y;
+	vector<int> test_y;
+	read_Mnist_Label(Ytrain_file, train_y, rank, comm_size);
+	read_Mnist_Label(Ytest_file, test_y, rank, comm_size);
 	cout << train_y.size() << endl;
 	cout << test_y.size() << endl;
 	cout << "data loaded" << endl;
