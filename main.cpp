@@ -1,4 +1,4 @@
-#include "model.h"
+#include "model_cpu.h"
 #include "mnist.h"
 #include <time.h>
 
@@ -7,19 +7,19 @@
 #define BATCH_SIZE 64
 #define EPOCH 10
 
-/*
+
 int main(int argc, char **argv) {
-	
+	/*
 	int comm_size;
 	int rank;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	
+	*/
 	int rank = 0;
 	int comm_size = 1;
-
+	
 	string Xtrain_file = "train-images-idx3-ubyte";
 	string Ytrain_file = "train-labels-idx1-ubyte";
 	string Xtest_file = "t10k-images-idx3-ubyte";
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
 	layers.push_back(300);
 
 	clock_t t = clock();
-	Model* model = new Model(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers, comm_size);
+	Model_cpu* model = new Model_cpu(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers);
 	for (int i = 0; i < EPOCH; i++) {
 		cout << "start for epoch: " << i << endl;
 		model->epoch(train_X, train_y);
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
 	float time = (float)t / CLOCKS_PER_SEC;
 	cout << "time consuming: " << time << " seconds" << endl;
 	model->freeMemory();
-	MPI_Finalize();
+	//MPI_Finalize();
 
 	return 0;
-}*/
+}

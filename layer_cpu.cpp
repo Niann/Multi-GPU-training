@@ -345,7 +345,7 @@ void SoftmaxLayer_cpu::softmax(int numElements, float* Z) {
 	free(P);
 }
 
-
+/*
 int main() {
 	using namespace cpu;
 	int batch = 5;
@@ -392,4 +392,4 @@ int main() {
 	s->freeMemory();
 	l->freeMemory();
 	free(Y);
-}
+}*/
