@@ -28,8 +28,7 @@ void printMatrix(const float* a, int r, int c) {
 
 void reluHelper(float* Z, float* dZ, int numElements) {
 	// perform relu activation and calculate gradients simultaneously
-
-	for (int i = 0; i < numElements;i++) {
+	for (int i = 0; i < numElements; i++) {
 		if (Z[i] < 0) {
 			Z[i] = 0;
 			dZ[i] = 0;
@@ -53,7 +52,7 @@ void broadcastHelper(float* A, const float* b, int r, int c, bool row) {
 }
 
 void elementMulHelper(float* A, const float* B, int numElements, bool invB) {
-	// perform relu activation and calculate gradients simultaneously
+	// perform element-wise multiplication
 	for (int i = 0; i < numElements; i++) {
 		if (invB) {
 			A[i] /= B[i];
@@ -78,12 +77,12 @@ void elementAddHelper(float* A, const float* B, float alpha, int numElements) {
 	}
 }
 
-void matrixMulHelper(const float* A, const float* B, float* C, int m, int n, int k, float alpha) {
-	// perform relu activation and calculate gradients simultaneously
+void matrixMulHelper(const float* A, const float* B, float* C, int m, int n, int k, float alpha, float beta) {
+	// perform matrix-matrix multiplication
 	int i, j, k_;
 	#pragma omp parallel shared(A,B,C) private(i,j,k)
 	{
-	#pragma omp for schedule(dynamic)
+		#pragma omp for schedule(dynamic)
 		for (i = 0; i < m; i++)
 		{
 			for (j = 0; j < n; j++)
@@ -91,7 +90,7 @@ void matrixMulHelper(const float* A, const float* B, float* C, int m, int n, int
 				C[IDX2C(i,j,m)] = 0;
 				for (k_ = 0; k_ < k; k_++)
 				{
-					C[IDX2C(i, j, m)] += alpha * A[IDX2C(i, k_, m)] * B[IDX2C(k_, j, k)];
+					C[IDX2C(i, j, m)] = alpha * A[IDX2C(i, k_, m)] * B[IDX2C(k_, j, k)] + beta * C[IDX2C(i, j, m)];
 				}
 			}
 		}
@@ -109,7 +108,7 @@ void transpose(float* A, const float *B, int m, int n) {
 
 void copyMat(float* A, const float *B, int numElements) {
 	for (int i = 0; i < numElements; i++) {
-		A[i] += B[i];
+		A[i] = B[i];
 	}
 }
 
@@ -221,7 +220,7 @@ float* Layer_cpu::WX_b(const float* W, const float* X, float* b, int m, int n, i
 	// X is matrix of size (k, n)
 	// b is vector of size (m,)
 	// c is matrix of size (m, n)
-	float * c; // c - c on the device
+	float * c;
 	c = (float *)malloc(m*n * sizeof(*c));
 
 	broadcast(c, b, m, n, true); // broadcast b
@@ -260,10 +259,9 @@ void Layer_cpu::matrixMul(const float* A, const float* B, float* C, int m, int n
 		copyMat(tB, B, k*n);
 	}
 	
-	matrixMulHelper(tA, tB, C, m, n, k, alpha);
+	matrixMulHelper(tA, tB, C, m, n, k, alpha, beta);
 	free(tA);
 	free(tB);
-
 }
 
 void Layer_cpu::reduceSum(float* A, float* b, int l, int batch, bool columnwise) {
@@ -281,9 +279,7 @@ void Layer_cpu::reduceSum(float* A, float* b, int l, int batch, bool columnwise)
 		for (int i = 0; i < l; i++)
 			x[i] = 1;
 
-		d_x = (float *)malloc(l * sizeof(float));
-
-		matrixMul(A, d_x, b, batch, 1, l, true, false, alpha, 0.f);
+		matrixMul(A, x, b, batch, 1, l, true, false, alpha, 0.f);
 	}
 	else {
 		x = (float *)malloc(batch * sizeof(float));
@@ -291,9 +287,7 @@ void Layer_cpu::reduceSum(float* A, float* b, int l, int batch, bool columnwise)
 		for (int i = 0; i < batch; i++)
 			x[i] = 1;
 
-		d_x = (float *)malloc(batch * sizeof(float));
-
-		matrixMul(A, d_x, b, l, 1, batch, false, false, alpha, 0.f);
+		matrixMul(A, x, b, l, 1, batch, false, false, alpha, 0.f);
 	}
 	free(x);
 }
@@ -301,37 +295,27 @@ void Layer_cpu::reduceSum(float* A, float* b, int l, int batch, bool columnwise)
 void Layer_cpu::elementwiseMul(int numElements, float* A, const float* B, bool invB) {
 	// element-wise matrix multiplication, store results in A
 	// A = A * B
-	int threadsPerBlock = 256;
-	int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
 	elementMulHelper(A, B, numElements, invB);
 }
 
 void Layer_cpu::elementwiseAdd(int numElements, float* A, const float* B, float alpha) {
 	// element-wise matrix/vector addtion
 	// A = A + alpha * B
-	int threadsPerBlock = 256;
-	int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
 	elementAddHelper(A, B, alpha, numElements);
 }
 
 void Layer_cpu::elementwiseExp(float* A, int numElements) {
 	// element-wise exponential
-	int threadsPerBlock = 256;
-	int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
 	expHelper(A, numElements);
 }
 
 void Layer_cpu::broadcast(float* A, float* b, int r, int c, bool row) {
 	// broadcast b to A by row/column
-	int threadsPerBlock = 256;
-	int blocksPerGrid = (r * c + threadsPerBlock - 1) / threadsPerBlock;
 	broadcastHelper(A, b, r, c, row);
 }
 
 void ReluLayer_cpu::relu(int numElements, float* Z, float* dZ) {
 	// perform relu activation and calculate gradients simultaneously
-	int threadsPerBlock = 256;
-	int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
 	reluHelper(Z, dZ, numElements);
 }
 

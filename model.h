@@ -1,5 +1,6 @@
 #include "layer.cuh"
 #include "mnist.h"
+
 #include <iostream>
 #include <vector>
 #include <algorithm>
