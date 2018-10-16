@@ -3,15 +3,6 @@
 #include <stdlib.h>
 #include <random>
 
-#include "cublas_v2.h"
-
-#include <cuda_runtime.h>
-#include <device_launch_parameters.h>
-
-void initialization(float* a, int size);
-void printMatrix(const float* a, int r, int c);
-void printGPUMatrix(const float* a, int r, int c);
-
 class Layer_cpu {
 protected:
 	int l_prev, l_curr; // l_prev : neural number of previous layer, l : neural number of current layer

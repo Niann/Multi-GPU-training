@@ -7,16 +7,16 @@
 #define BATCH_SIZE 64
 #define EPOCH 10
 
-
+/*
 int main(int argc, char **argv) {
-	/*
+	
 	int comm_size;
 	int rank;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	*/
+	
 	int rank = 0;
 	int comm_size = 1;
 
@@ -60,4 +60,4 @@ int main(int argc, char **argv) {
 	MPI_Finalize();
 
 	return 0;
-}
+}*/

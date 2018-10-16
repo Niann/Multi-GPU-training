@@ -1,134 +1,135 @@
 #include "layer_cpu.h"
 
-using namespace std;
 #define IDX2C(i, j, ld) ((( j )*( ld ))+( i )) // ld - leading dimension
-#define IDX2C_T(i, j, ld) ((( i )*( ld ))+( j )) // trans
 
-std::default_random_engine generator;
-std::normal_distribution<float> distribution(0.0f, 0.005f);
+namespace cpu {
 
-void initialization(float* a, int size) {
-	for (int i = 0; i < size; i++) {
-		a[i] = distribution(generator);
+	std::default_random_engine generator;
+	std::normal_distribution<float> distribution(0.0f, 0.005f);
+
+	void initialization(float* a, int size, bool t) {
+		for (int i = 0; i < size; i++) {
+			if (!t)
+				a[i] = distribution(generator);
+			else
+				a[i] = 1;
+		}
 	}
-}
 
-void printMatrix(const float* a, int r, int c) {
-	// print matrix row by row, debugging purpose
-	// r - number of rows
-	// c - number of columns
-	for (int i = 0; i < r; i++) {
-		for (int j = 0; j < c; j++) {
-			printf(" %6.3f", a[IDX2C(i, j, r)]);
+	void printMatrix(const float* a, int r, int c) {
+		// print matrix row by row, debugging purpose
+		// r - number of rows
+		// c - number of columns
+		for (int i = 0; i < r; i++) {
+			for (int j = 0; j < c; j++) {
+				printf(" %6.3f", a[IDX2C(i, j, r)]);
+			}
+			printf("\n");
 		}
 		printf("\n");
 	}
-	printf("\n");
-}
 
-void reluHelper(float* Z, float* dZ, int numElements) {
-	// perform relu activation and calculate gradients simultaneously
-	for (int i = 0; i < numElements; i++) {
-		if (Z[i] < 0) {
-			Z[i] = 0;
-			dZ[i] = 0;
-		}
-		else {
-			dZ[i] = 1;
-		}
-	}
-}
-
-void broadcastHelper(float* A, const float* b, int r, int c, bool row) {
-	// broadcast b to A by row/column
-	for (int i = 0; i < r * c; i++) {
-		if (row) {
-			A[i] = b[i % r];
-		}
-		else {
-			A[i] = b[i / r];
+	void reluHelper(float* Z, float* dZ, int numElements) {
+		// perform relu activation and calculate gradients simultaneously
+		for (int i = 0; i < numElements; i++) {
+			if (Z[i] < 0) {
+				Z[i] = 0;
+				dZ[i] = 0;
+			}
+			else {
+				dZ[i] = 1;
+			}
 		}
 	}
-}
 
-void elementMulHelper(float* A, const float* B, int numElements, bool invB) {
-	// perform element-wise multiplication
-	for (int i = 0; i < numElements; i++) {
-		if (invB) {
-			A[i] /= B[i];
+	void broadcastHelper(float* A, const float* b, int r, int c, bool row) {
+		// broadcast b to A by row/column
+		for (int i = 0; i < r * c; i++) {
+			if (row) {
+				A[i] = b[i % r];
+			}
+			else {
+				A[i] = b[i / r];
+			}
 		}
-		else {
-			A[i] *= B[i];
+	}
+
+	void elementMulHelper(float* A, const float* B, int numElements, bool invB) {
+		// perform element-wise multiplication
+		for (int i = 0; i < numElements; i++) {
+			if (invB) {
+				A[i] /= B[i];
+			}
+			else {
+				A[i] *= B[i];
+			}
 		}
 	}
-}
 
-void expHelper(float* A, int numElements) {
-	// perform element-wise exp
-	for (int i = 0; i < numElements; i++) {
-		A[i] = exp(A[i]);
+	void expHelper(float* A, int numElements) {
+		// perform element-wise exp
+		for (int i = 0; i < numElements; i++) {
+			A[i] = exp(A[i]);
+		}
 	}
-}
 
-void elementAddHelper(float* A, const float* B, float alpha, int numElements) {
-	// perform element-wise addition
-	for (int i = 0; i < numElements; i++) {
-		A[i] += alpha * B[i];
+	void elementAddHelper(float* A, const float* B, float alpha, int numElements) {
+		// perform element-wise addition
+		for (int i = 0; i < numElements; i++) {
+			A[i] += alpha * B[i];
+		}
 	}
-}
 
-void matrixMulHelper(const float* A, const float* B, float* C, int m, int n, int k, float alpha, float beta) {
-	// perform matrix-matrix multiplication
-	int i, j, k_;
-	#pragma omp parallel shared(A,B,C) private(i,j,k)
-	{
-		#pragma omp for schedule(dynamic)
-		for (i = 0; i < m; i++)
+	void matrixMulHelper(const float* A, const float* B, float* C, int m, int n, int k, float alpha, float beta) {
+		// perform matrix-matrix multiplication
+		int i, j, k_;
+//#pragma omp parallel shared(A,B,C) private(i,j,k)
 		{
-			for (j = 0; j < n; j++)
+//#pragma omp for schedule(dynamic)
+			for (i = 0; i < m; i++)
 			{
-				C[IDX2C(i,j,m)] = 0;
-				for (k_ = 0; k_ < k; k_++)
+				for (j = 0; j < n; j++)
 				{
-					C[IDX2C(i, j, m)] = alpha * A[IDX2C(i, k_, m)] * B[IDX2C(k_, j, k)] + beta * C[IDX2C(i, j, m)];
+					C[IDX2C(i, j, m)] *= beta;
+					for (k_ = 0; k_ < k; k_++)
+					{
+						C[IDX2C(i, j, m)] += alpha * A[IDX2C(i, k_, m)] * B[IDX2C(k_, j, k)];
+					}
 				}
 			}
 		}
 	}
-}
 
-void transpose(float* A, const float *B, int m, int n) {
-	#pragma omp for
-	for (int i = 0; i < m; i++) {
-		for (int j = 0; j < n; j++) {
-			A[IDX2C_T(i, j, n)] = B[IDX2C(i, j, m)];
+	void transpose(float* A, const float *B, int m, int n) {
+		for (int i = 0; i < m; i++) {
+			for (int j = 0; j < n; j++) {
+				A[IDX2C(j, i, n)] = B[IDX2C(i, j, m)];
+			}
+		}
+	}
+
+	void copyMat(float* A, const float *B, int numElements) {
+		for (int i = 0; i < numElements; i++) {
+			A[i] = B[i];
 		}
 	}
 }
 
-void copyMat(float* A, const float *B, int numElements) {
-	for (int i = 0; i < numElements; i++) {
-		A[i] = B[i];
-	}
-}
-
+using namespace cpu;
 
 Layer_cpu::Layer_cpu(int l1, int l2) {
 	l_prev = l1;
 	l_curr = l2;
 
 	// allocate memory
-	float* h_W = (float *)malloc(l1 * l2 * sizeof(float));
-	float* h_b = (float *)malloc(l2 * sizeof(float));
-
-	float* W = (float *)malloc(l1 * l2 * sizeof(float));
-	float* dW = (float *)malloc(l1 * l2 * sizeof(float));
-	float* b = (float *)malloc(l2 * sizeof(float));
-	float* db = (float *)malloc(l2 * sizeof(float));
+	W = (float *)malloc(l1 * l2 * sizeof(float));
+	dW = (float *)malloc(l1 * l2 * sizeof(float));
+	b = (float *)malloc(l2 * sizeof(float));
+	db = (float *)malloc(l2 * sizeof(float));
 
 	// initialize W and b
-	initialization(W, l1 * l2);
-	initialization(b, l2);
+	initialization(W, l1 * l2, false);
+	initialization(b, l2, false);
 }
 
 ReluLayer_cpu::ReluLayer_cpu(int l1, int l2) : Layer_cpu(l1, l2) {}
@@ -271,7 +272,6 @@ void Layer_cpu::reduceSum(float* A, float* b, int l, int batch, bool columnwise)
 
 	// create a vector of same size as b filled with 1
 	float* x;
-	float* d_x;
 	float alpha;
 	if (columnwise) {
 		x = (float *)malloc(l * sizeof(float));
@@ -345,8 +345,9 @@ void SoftmaxLayer_cpu::softmax(int numElements, float* Z) {
 	free(P);
 }
 
-/*
+
 int main() {
+	using namespace cpu;
 	int batch = 5;
 	int feature = 10;
 	int l1 = 6;
@@ -355,46 +356,40 @@ int main() {
 	float* X;
 	float* Y;
 	X = (float *)malloc(feature * batch * sizeof(float));
-	initialization(X, feature * batch);
+	initialization(X, feature * batch, true);
 	Y = (float *)malloc(l2 * batch * sizeof(float));
-	initialization(Y, l2 * batch);
+	initialization(Y, l2 * batch, true);
 	printf("foward pass\n");
 	printf("input matrix:\n");
 	printMatrix(X, feature, batch);
-	float* d_X;
-	float* d_Y;
-	cudaMalloc((void**)& d_X, feature * batch * sizeof(float));
-	cudaMalloc((void**)& d_Y, l2 * batch * sizeof(float));
-	cudaMemcpy(d_X, X, feature * batch * sizeof(float), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_Y, Y, l2 * batch * sizeof(float), cudaMemcpyHostToDevice);
 
-	Layer* l = new ReluLayer(feature, l1);
-	Layer* s = new SoftmaxLayer(l1, l2);
-	float* X1 = l->forward(d_X, batch);
+	Layer_cpu* l = new ReluLayer_cpu(feature, l1);
+	Layer_cpu* s = new SoftmaxLayer_cpu(l1, l2);
+	float* X1 = l->forward(X, batch);
 	printf("output matrix:\n");
-	printGPUMatrix(X1, l1, batch);
+	printMatrix(X1, l1, batch);
 
 	float* X2 = s->forward(X1, batch);
 	printf("output matrix:\n");
-	printGPUMatrix(X2, l2, batch);
+	printMatrix(X2, l2, batch);
 	
 	printf("\nbackward pass\n");
 	printf("input matrix:\n");
-	printGPUMatrix(d_Y, l2, batch);
+	printMatrix(Y, l2, batch);
 
-	float* dA1 = s->backward(d_Y, batch);
+	float* dA1 = s->backward(Y, batch);
 	printf("output matrix:\n");
-	printGPUMatrix(dA1, l1, batch);
+	printMatrix(dA1, l1, batch);
 
 	float* dA0 = l->backward(dA1, batch);
 	printf("output matrix:\n");
-	printGPUMatrix(dA0, feature, batch);
+	printMatrix(dA0, feature, batch);
 	
 	printf("\ngradient update\n");
-	s->gradientUpdate(1);
-	l->gradientUpdate(1);
+	s->SGDUpdate(1);
+	l->SGDUpdate(1);
 
 	s->freeMemory();
 	l->freeMemory();
-	cudaFree(Y);
-}*/
+	free(Y);
+}
