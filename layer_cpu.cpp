@@ -7,13 +7,9 @@ namespace cpu {
 	std::default_random_engine generator;
 	std::normal_distribution<float> distribution(0.0f, 0.005f);
 
-	void initialization(float* a, int size, bool t) {
-		for (int i = 0; i < size; i++) {
-			if (!t)
-				a[i] = distribution(generator);
-			else
-				a[i] = 1;
-		}
+	void initialization(float* a, int size) {
+		for (int i = 0; i < size; i++)
+			a[i] = distribution(generator);
 	}
 
 	void printMatrix(const float* a, int r, int c) {
@@ -31,7 +27,9 @@ namespace cpu {
 
 	void reluHelper(float* Z, float* dZ, int numElements) {
 		// perform relu activation and calculate gradients simultaneously
-		for (int i = 0; i < numElements; i++) {
+		int i;
+		#pragma omp parallel for
+		for (i = 0; i < numElements; i++) {
 			if (Z[i] < 0) {
 				Z[i] = 0;
 				dZ[i] = 0;
@@ -44,7 +42,9 @@ namespace cpu {
 
 	void broadcastHelper(float* A, const float* b, int r, int c, bool row) {
 		// broadcast b to A by row/column
-		for (int i = 0; i < r * c; i++) {
+		int i;
+		#pragma omp parallel for
+		for (i = 0; i < r * c; i++) {
 			if (row) {
 				A[i] = b[i % r];
 			}
@@ -56,7 +56,9 @@ namespace cpu {
 
 	void elementMulHelper(float* A, const float* B, int numElements, bool invB) {
 		// perform element-wise multiplication
-		for (int i = 0; i < numElements; i++) {
+		int i;
+		#pragma omp parallel for
+		for (i = 0; i < numElements; i++) {
 			if (invB) {
 				A[i] /= B[i];
 			}
@@ -68,14 +70,18 @@ namespace cpu {
 
 	void expHelper(float* A, int numElements) {
 		// perform element-wise exp
-		for (int i = 0; i < numElements; i++) {
+		int i;
+        #pragma omp parallel for
+		for (i = 0; i < numElements; i++) {
 			A[i] = exp(A[i]);
 		}
 	}
 
 	void elementAddHelper(float* A, const float* B, float alpha, int numElements) {
 		// perform element-wise addition
-		for (int i = 0; i < numElements; i++) {
+		int i;
+		#pragma omp parallel for
+		for (i = 0; i < numElements; i++) {
 			A[i] += alpha * B[i];
 		}
 	}
@@ -83,9 +89,9 @@ namespace cpu {
 	void matrixMulHelper(const float* A, const float* B, float* C, int m, int n, int k, float alpha, float beta) {
 		// perform matrix-matrix multiplication
 		int i, j, k_;
-//#pragma omp parallel shared(A,B,C) private(i,j,k)
+		#pragma omp parallel shared(A, B, C) private(i, j, k_)
 		{
-//#pragma omp for schedule(dynamic)
+			#pragma omp for schedule(dynamic)
 			for (i = 0; i < m; i++)
 			{
 				for (j = 0; j < n; j++)
@@ -101,15 +107,19 @@ namespace cpu {
 	}
 
 	void transpose(float* A, const float *B, int m, int n) {
-		for (int i = 0; i < m; i++) {
-			for (int j = 0; j < n; j++) {
+		int i, j;
+		#pragma omp parallel for private(j)
+		for (i = 0; i < m; i++) {
+			for (j = 0; j < n; j++) {
 				A[IDX2C(j, i, n)] = B[IDX2C(i, j, m)];
 			}
 		}
 	}
 
 	void copyMat(float* A, const float *B, int numElements) {
-		for (int i = 0; i < numElements; i++) {
+		int i;
+		#pragma omp parallel for
+		for (i = 0; i < numElements; i++) {
 			A[i] = B[i];
 		}
 	}
@@ -128,8 +138,8 @@ Layer_cpu::Layer_cpu(int l1, int l2) {
 	db = (float *)malloc(l2 * sizeof(float));
 
 	// initialize W and b
-	initialization(W, l1 * l2, false);
-	initialization(b, l2, false);
+	initialization(W, l1 * l2);
+	initialization(b, l2);
 }
 
 ReluLayer_cpu::ReluLayer_cpu(int l1, int l2) : Layer_cpu(l1, l2) {}
@@ -356,9 +366,9 @@ int main() {
 	float* X;
 	float* Y;
 	X = (float *)malloc(feature * batch * sizeof(float));
-	initialization(X, feature * batch, true);
+	initialization(X, feature * batch);
 	Y = (float *)malloc(l2 * batch * sizeof(float));
-	initialization(Y, l2 * batch, true);
+	initialization(Y, l2 * batch);
 	printf("foward pass\n");
 	printf("input matrix:\n");
 	printMatrix(X, feature, batch);
