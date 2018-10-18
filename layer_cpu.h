@@ -2,9 +2,11 @@
 #include <math.h>
 #include <stdlib.h>
 #include <random>
+#include <mpi.h>
 
 class Layer_cpu {
 protected:
+	int processNum;
 	int l_prev, l_curr; // l_prev : neural number of previous layer, l : neural number of current layer
 	float* W;  // weights, matrix of size (l_curr, l_prev), pointer on gpu
 	float* dW; // W gradients
@@ -15,7 +17,7 @@ protected:
 			   // in backward pass, dL/dZ = dL/dA * dA/dZ
 	float* A_prev; // activation from previous layer, book-keeping for backward pass
 public:
-	Layer_cpu(int l1, int l2);
+	Layer_cpu(int l1, int l2, int process);
 	virtual float* forward(float* X_in, int batch) = 0;
 	virtual float* backward(float* dA, int batch) = 0;
 	void SGDUpdate(float alpha);
@@ -29,11 +31,12 @@ protected:
 	void elementwiseAdd(int numElements, float* A, const float* B, float alpha);
 	void elementwiseExp(float* A, int numElements);
 	void broadcast(float* A, float* b, int r, int c, bool row);
+	void averageGradients(float* dW, float* all_dW, float* db, float* all_db);
 };
 
 class ReluLayer_cpu : public Layer_cpu {
 public:
-	ReluLayer_cpu(int l1, int l2);
+	ReluLayer_cpu(int l1, int l2, int process);
 	float* forward(float* X_in, int batch);
 	float* backward(float* dA, int batch);
 private:
@@ -42,7 +45,7 @@ private:
 
 class SoftmaxLayer_cpu : public Layer_cpu {
 public:
-	SoftmaxLayer_cpu(int l1, int l2);
+	SoftmaxLayer_cpu(int l1, int l2, int process);
 	float* forward(float* X_in, int batch);
 	float* backward(float* Y, int batch);
 private:

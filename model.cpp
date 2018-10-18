@@ -130,7 +130,7 @@ void Model::freeMemory() {
 	cudaFree(Y);
 }
 
-/*
+
 int main(int argc, char **argv) {
 	int comm_size;
 	int rank;
@@ -179,4 +179,4 @@ int main(int argc, char **argv) {
 	MPI_Finalize();
 
 	return 0;
-}*/
+}

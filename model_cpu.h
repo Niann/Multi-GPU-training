@@ -19,7 +19,7 @@ private:
 	float* Y; // place holder for Y
 
 public:
-	Model_cpu(int in, int out, float lr, int batch_size, vector<int> layer_size);
+	Model_cpu(int in, int out, float lr, int batch_size, vector<int> layer_size, int processNum);
 	void train(vector<vector<float>> data, vector<int> label);
 	void epoch(vector<vector<float>> &data, vector<int> &label);
 	float accuracy(vector<vector<float>> &data, vector<int> &label);

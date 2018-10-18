@@ -4,12 +4,15 @@
 
 namespace cpu {
 
-	std::default_random_engine generator;
-	std::normal_distribution<float> distribution(0.0f, 0.005f);
-
 	void initialization(float* a, int size) {
-		for (int i = 0; i < size; i++)
+		std::default_random_engine generator;
+		std::normal_distribution<float> distribution(0.0f, 0.005f);
+		for (int i = 0; i < size; i++) {
+			// use a universal hash function
+			// guarantee that same size of input has same initial value
+			generator.seed(((i * 233 + 66666699) % 433494437) % (size * 10));
 			a[i] = distribution(generator);
+		}
 	}
 
 	void printMatrix(const float* a, int r, int c) {
@@ -123,13 +126,26 @@ namespace cpu {
 			A[i] = B[i];
 		}
 	}
+
+	void elementAvgHelper(float* dest, float* src, int numElements, int copy) {
+		int i, j;
+		#pragma omp parallel for private(j)
+		for (i = 0; i < numElements; i++) {
+			float temp = 0;
+			for (j = 0; j < copy; j++) {
+				temp += src[numElements * j + i];
+			}
+			dest[i] = temp / copy;
+		}
+	}
 }
 
 using namespace cpu;
 
-Layer_cpu::Layer_cpu(int l1, int l2) {
+Layer_cpu::Layer_cpu(int l1, int l2, int process) {
 	l_prev = l1;
 	l_curr = l2;
+	processNum = process;
 
 	// allocate memory
 	W = (float *)malloc(l1 * l2 * sizeof(float));
@@ -142,9 +158,9 @@ Layer_cpu::Layer_cpu(int l1, int l2) {
 	initialization(b, l2);
 }
 
-ReluLayer_cpu::ReluLayer_cpu(int l1, int l2) : Layer_cpu(l1, l2) {}
+ReluLayer_cpu::ReluLayer_cpu(int l1, int l2, int process) : Layer_cpu(l1, l2, process) {}
 
-SoftmaxLayer_cpu::SoftmaxLayer_cpu(int l1, int l2) : Layer_cpu(l1, l2) {}
+SoftmaxLayer_cpu::SoftmaxLayer_cpu(int l1, int l2, int process) : Layer_cpu(l1, l2, process) {}
 
 float* ReluLayer_cpu::forward(float* X_in, int batch) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
@@ -210,6 +226,18 @@ float* SoftmaxLayer_cpu::backward(float* Y, int batch) {
 
 void Layer_cpu::SGDUpdate(float alpha) {
 	// perform parameter update w.r.t to gradient direction with learning rate alpha
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	float* all_dW = (float *)malloc(l_curr * l_prev * processNum * sizeof(float));
+	float* all_db = (float *)malloc(l_curr * processNum * sizeof(float));
+
+	// synchonize gradients from all processes
+	MPI_Allgather(dW, l_prev * l_curr, MPI_FLOAT, all_dW, l_prev * l_curr, MPI_FLOAT, MPI_COMM_WORLD);
+	MPI_Allgather(db, l_curr, MPI_FLOAT, all_db, l_curr, MPI_FLOAT, MPI_COMM_WORLD);
+
+	// calculate mean of all_dW and all_db and store in dW and db
+	averageGradients(dW, all_dW, db, all_db);
+
 	elementwiseAdd(l_curr * l_prev, W, dW, -alpha);
 	elementwiseAdd(l_curr, b, db, -alpha);
 }
@@ -322,6 +350,16 @@ void Layer_cpu::elementwiseExp(float* A, int numElements) {
 void Layer_cpu::broadcast(float* A, float* b, int r, int c, bool row) {
 	// broadcast b to A by row/column
 	broadcastHelper(A, b, r, c, row);
+}
+
+void Layer_cpu::averageGradients(float* dW, float* all_dW, float* db, float* all_db) {
+	// average dW and db
+
+	int numElements_W = l_curr * l_prev;
+	elementAvgHelper(dW, all_dW, numElements_W, processNum);
+
+	int numElements_b = l_curr;
+	elementAvgHelper(db, all_db, numElements_b, processNum);
 }
 
 void ReluLayer_cpu::relu(int numElements, float* Z, float* dZ) {

@@ -9,17 +9,17 @@
 
 #define IDX2C(i, j, ld) ((( j )*( ld ))+( i ))
 
-Model_cpu::Model_cpu(int in, int out, float lr, int batch_size, vector<int> layer_size) {
+Model_cpu::Model_cpu(int in, int out, float lr, int batch_size, vector<int> layer_size, int processNum) {
 	this->feature_size = in;
 	this->out_size = out;
 	this->batch_size = batch_size;
 	this->learning_rate = lr;
 
-	layers.push_back(new ReluLayer_cpu(in, layer_size[0]));
+	layers.push_back(new ReluLayer_cpu(in, layer_size[0], processNum));
 	for (int i = 0; i < layer_size.size() - 1; i++) {
-		layers.push_back(new ReluLayer_cpu(layer_size[i], layer_size[i + 1]));
+		layers.push_back(new ReluLayer_cpu(layer_size[i], layer_size[i + 1], processNum));
 	}
-	layers.push_back(new SoftmaxLayer_cpu(layer_size.back(), out));
+	layers.push_back(new SoftmaxLayer_cpu(layer_size.back(), out, processNum));
 
 	// allocate memory for place holders
 	X = (float *)malloc(batch_size * in * sizeof(float));
@@ -121,16 +121,13 @@ void Model_cpu::freeMemory() {
 }
 
 int main(int argc, char **argv) {
-	/*
+	
 	int comm_size;
 	int rank;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	*/
-	int rank = 0;
-	int comm_size = 1;
 
 	string Xtrain_file = "train-images-idx3-ubyte";
 	string Ytrain_file = "train-labels-idx1-ubyte";
@@ -158,7 +155,7 @@ int main(int argc, char **argv) {
 	layers.push_back(300);
 
 	clock_t t = clock();
-	Model_cpu* model = new Model_cpu(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers);
+	Model_cpu* model = new Model_cpu(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers, comm_size);
 	for (int i = 0; i < EPOCH; i++) {
 		cout << "start for epoch: " << i << endl;
 		model->epoch(train_X, train_y);
@@ -169,7 +166,7 @@ int main(int argc, char **argv) {
 	float time = (float)t / CLOCKS_PER_SEC;
 	cout << "time consuming: " << time << " seconds" << endl;
 	model->freeMemory();
-	//MPI_Finalize();
+	MPI_Finalize();
 
 	return 0;
 }
