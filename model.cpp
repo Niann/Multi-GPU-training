@@ -36,7 +36,7 @@ void Model::train(vector<vector<float>> data,vector<int> label) {
 		cout << "data error! \n";
 		return;
 	}
-	
+
 	for (int i = 0; i < data.size(); i++) {
 		for (int j = 0; j < this->feature_size; j++) {
 			X[IDX2C(j, i, this->feature_size)] = data[i][j];
@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
 	vector<vector<float>> train_X;
 	vector<vector<float>> test_X;
 	read_Mnist(Xtrain_file, train_X, rank, comm_size);
-	read_Mnist(Xtest_file, test_X, rank, comm_size);
+	read_Mnist(Xtest_file, test_X, 0, 1);
 	cout << "training set size: " << train_X.size() << endl;
 	cout << "test set size: " << test_X.size() << endl;
 
@@ -156,7 +156,7 @@ int main(int argc, char **argv) {
 	vector<int> train_y;
 	vector<int> test_y;
 	read_Mnist_Label(Ytrain_file, train_y, rank, comm_size);
-	read_Mnist_Label(Ytest_file, test_y, rank, comm_size);
+	read_Mnist_Label(Ytest_file, test_y, 0, 1);
 	cout << train_y.size() << endl;
 	cout << test_y.size() << endl;
 	cout << "data loaded" << endl;

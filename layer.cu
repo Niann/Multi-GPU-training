@@ -2,117 +2,112 @@
 
 #define IDX2C(i, j, ld) ((( j )*( ld ))+( i )) // ld - leading dimension
 
-namespace gpu {
-
-	void initialization(float* a, int size) {
-		std::default_random_engine generator;
-		std::normal_distribution<float> distribution(0.0f, 0.005f);
-		for (int i = 0; i < size; i++) {
-			// use a universal hash function
-			// guarantee that same size of input has same initial value
-			generator.seed(((i * 233 + 66666699) % 433494437) % (size * 10));
-			a[i] = distribution(generator);
-		}
+void initialization(float* a, int size) {
+	std::default_random_engine generator;
+	std::normal_distribution<float> distribution(0.0f, 0.005f);
+	for (int i = 0; i < size; i++) {
+		// use a universal hash function
+		// guarantee that same size of input has same initial value
+		generator.seed(((i * 233 + 66666699) % 433494437) % (size * 10));
+		a[i] = distribution(generator);
 	}
+}
 
-	void printMatrix(const float* a, int r, int c) {
-		// print matrix row by row, debugging purpose
-		// r - number of rows
-		// c - number of columns
-		for (int i = 0; i < r; i++) {
-			for (int j = 0; j < c; j++) {
-				printf(" %6.3f", a[IDX2C(i, j, r)]);
-			}
-			printf("\n");
+void printMatrix(const float* a, int r, int c) {
+	// print matrix row by row, debugging purpose
+	// r - number of rows
+	// c - number of columns
+	for (int i = 0; i < r; i++) {
+		for (int j = 0; j < c; j++) {
+			printf(" %6.3f", a[IDX2C(i, j, r)]);
 		}
 		printf("\n");
 	}
+	printf("\n");
+}
 
-	void printGPUMatrix(const float* a, int r, int c) {
-		// print matrix on gpu
-		float* h = (float *)malloc(r * c * sizeof(float));
-		cudaMemcpy(h, a, r * c * sizeof(float), cudaMemcpyDeviceToHost);
-		printMatrix(h, r, c);
-		free(h);
-	}
+void printGPUMatrix(const float* a, int r, int c) {
+	// print matrix on gpu
+	float* h = (float *)malloc(r * c * sizeof(float));
+	cudaMemcpy(h, a, r * c * sizeof(float), cudaMemcpyDeviceToHost);
+	printMatrix(h, r, c);
+	free(h);
+}
 
 
-	__global__ void reluHelper(float* Z, float* dZ, int numElements) {
-		// perform relu activation and calculate gradients simultaneously
-		int i = blockDim.x * blockIdx.x + threadIdx.x;
+__global__ void reluHelper(float* Z, float* dZ, int numElements) {
+	// perform relu activation and calculate gradients simultaneously
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-		if (i < numElements) {
-			if (Z[i] < 0) {
-				Z[i] = 0;
-				dZ[i] = 0;
-			}
-			else {
-				dZ[i] = 1;
-			}
+	if (i < numElements) {
+		if (Z[i] < 0) {
+			Z[i] = 0;
+			dZ[i] = 0;
 		}
-	}
-
-	__global__ void broadcastHelper(float* A, const float* b, int r, int c, bool row) {
-		// broadcast b to A by row/column
-		int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-		if (i < r * c) {
-			if (row) {
-				A[i] = b[i % r];
-			}
-			else {
-				A[i] = b[i / r];
-			}
-		}
-	}
-
-	__global__ void elementMulHelper(float* A, const float* B, int numElements, bool invB) {
-		// perform relu activation and calculate gradients simultaneously
-		int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-		if (i < numElements) {
-			if (invB) {
-				A[i] /= B[i];
-			}
-			else {
-				A[i] *= B[i];
-			}
-		}
-	}
-
-	__global__ void expHelper(float* A, int numElements) {
-		// perform element-wise exp
-		int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-		if (i < numElements) {
-			A[i] = exp(A[i]);
-		}
-	}
-
-	__global__ void elementAddHelper(float* A, const float* B, float alpha, int numElements) {
-		// perform element-wise addition
-		int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-		if (i < numElements) {
-			A[i] += alpha * B[i];
-		}
-	}
-
-	__global__ void elementAvgHelper(float* dest, float* src, int numElements, int copy) {
-		// element-wise average
-		int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-		if (i < numElements) {
-			float temp = 0;
-			for (int j = 0; j < copy; j++) {
-				temp += src[numElements * j + i];
-			}
-			dest[i] = temp / copy;
+		else {
+			dZ[i] = 1;
 		}
 	}
 }
 
-using namespace gpu;
+__global__ void broadcastHelper(float* A, const float* b, int r, int c, bool row) {
+	// broadcast b to A by row/column
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < r * c) {
+		if (row) {
+			A[i] = b[i % r];
+		}
+		else {
+			A[i] = b[i / r];
+		}
+	}
+}
+
+__global__ void elementMulHelper(float* A, const float* B, int numElements, bool invB) {
+	// perform relu activation and calculate gradients simultaneously
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < numElements) {
+		if (invB) {
+			A[i] /= B[i];
+		}
+		else {
+			A[i] *= B[i];
+		}
+	}
+}
+
+__global__ void expHelper(float* A, int numElements) {
+	// perform element-wise exp
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < numElements) {
+		A[i] = exp(A[i]);
+	}
+}
+
+__global__ void elementAddHelper(float* A, const float* B, float alpha, int numElements) {
+	// perform element-wise addition
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < numElements) {
+		A[i] += alpha * B[i];
+	}
+}
+
+__global__ void elementAvgHelper(float* dest, float* src, int numElements, int copy) {
+	// element-wise average
+	int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+	if (i < numElements) {
+		float temp = 0;
+		for (int j = 0; j < copy; j++) {
+			temp += src[numElements * j + i];
+		}
+		dest[i] = temp / copy;
+	}
+}
 
 Layer::Layer(int l1, int l2, int gpu) {
 	l_prev = l1;

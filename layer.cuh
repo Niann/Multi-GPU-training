@@ -8,6 +8,10 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 
+void initialization(float* a, int size);
+void printMatrix(const float* a, int r, int c);
+void printGPUMatrix(const float* a, int r, int c);
+
 class Layer {
 protected:
 	int gpuNum;

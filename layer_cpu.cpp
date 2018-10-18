@@ -240,6 +240,9 @@ void Layer_cpu::SGDUpdate(float alpha) {
 
 	elementwiseAdd(l_curr * l_prev, W, dW, -alpha);
 	elementwiseAdd(l_curr, b, db, -alpha);
+
+	free(all_dW);
+	free(all_db);
 }
 
 void Layer_cpu::freeMemory() {
@@ -276,11 +279,11 @@ void Layer_cpu::matrixMul(const float* A, const float* B, float* C, int m, int n
 	//   C   is matrix of size (m, n)
 	// modifies content of C in-place
 
-		
+
 	// matrix - matrix multiplication : d_c = alpha * op(d_a) @ op(d_b) + beta * d_c
 	// op(d_a) - m x k matrix , op(d_b) - k x n matrix , d_c - m x n matrix
 	// alpha, beta read from argument
-	
+
 	float *tA = (float *)malloc(m*k * sizeof(float));
 	float *tB = (float *)malloc(k*n * sizeof(float));
 
@@ -297,7 +300,7 @@ void Layer_cpu::matrixMul(const float* A, const float* B, float* C, int m, int n
 	else {
 		copyMat(tB, B, k*n);
 	}
-	
+
 	matrixMulHelper(tA, tB, C, m, n, k, alpha, beta);
 	free(tA);
 	free(tB);
@@ -420,7 +423,7 @@ int main() {
 	float* X2 = s->forward(X1, batch);
 	printf("output matrix:\n");
 	printMatrix(X2, l2, batch);
-	
+
 	printf("\nbackward pass\n");
 	printf("input matrix:\n");
 	printMatrix(Y, l2, batch);
@@ -432,7 +435,7 @@ int main() {
 	float* dA0 = l->backward(dA1, batch);
 	printf("output matrix:\n");
 	printMatrix(dA0, feature, batch);
-	
+
 	printf("\ngradient update\n");
 	s->SGDUpdate(1);
 	l->SGDUpdate(1);

@@ -76,7 +76,7 @@ void Model_cpu::epoch(vector<vector<float>> &data, vector<int> &label) {
 			batch_label.push_back(label[i + j]);
 		}
 		this->train(batch_data, batch_label);
-		cout << i/this->batch_size <<" of "<<data.size()/this->batch_size<< "\r";
+		//cout << i/this->batch_size <<" of "<<data.size()/this->batch_size<< "\r";
 	}
 	cout << "epoch done" << endl;
 }
@@ -121,7 +121,7 @@ void Model_cpu::freeMemory() {
 }
 
 int main(int argc, char **argv) {
-	
+
 	int comm_size;
 	int rank;
 
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
 	vector<vector<float>> train_X;
 	vector<vector<float>> test_X;
 	read_Mnist(Xtrain_file, train_X, rank, comm_size);
-	read_Mnist(Xtest_file, test_X, rank, comm_size);
+	read_Mnist(Xtest_file, test_X, 0, 1);
 	cout << "training set size: " << train_X.size() << endl;
 	cout << "test set size: " << test_X.size() << endl;
 
@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
 	vector<int> train_y;
 	vector<int> test_y;
 	read_Mnist_Label(Ytrain_file, train_y, rank, comm_size);
-	read_Mnist_Label(Ytest_file, test_y, rank, comm_size);
+	read_Mnist_Label(Ytest_file, test_y, 0, 1);
 	cout << train_y.size() << endl;
 	cout << test_y.size() << endl;
 	cout << "data loaded" << endl;
