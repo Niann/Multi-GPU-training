@@ -139,6 +139,9 @@ int main(int argc, char **argv) {
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+	cout << "batch size " << BATCH_SIZE << endl;
+	cout << "Comm size " << comm_size << endl;
+
 	string Xtrain_file = "train-images-idx3-ubyte";
 	string Ytrain_file = "train-labels-idx1-ubyte";
 	string Xtest_file = "t10k-images-idx3-ubyte";
@@ -165,17 +168,17 @@ int main(int argc, char **argv) {
 	layers.push_back(2000);
 	layers.push_back(2000);
 
-	clock_t t = clock();
 	Model* model = new Model(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers, comm_size);
 	for (int i = 0; i < EPOCH; i++) {
+		clock_t t = clock();
 		cout << "start for epoch: " << i << endl;
 		model->epoch(train_X, train_y);
-		//model->epoch(test_X, test_y);
+		t = clock() - t;
+		float time = (float)t / CLOCKS_PER_SEC;
+		cout << "time consuming: " << time << " seconds" << endl;
+		
 		model->accuracy(test_X, test_y);
 	}
-	t = clock() - t;
-	float time = (float)t / CLOCKS_PER_SEC;
-	cout << "time consuming: " << time << " seconds" << endl;
 	model->freeMemory();
 	MPI_Finalize();
 
