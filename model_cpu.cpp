@@ -51,7 +51,7 @@ void Model_cpu::train(vector<vector<float>> data, vector<int> label) {
 	// forward pass
 	float* X_in = X;
 	for (int i = 0; i < this->layers.size(); i++) {
-		X_in = layers[i]->forward(X_in, batch_size);
+		X_in = layers[i]->forward(X_in, batch_size, false);
 	}
 
 	// backward pass
@@ -91,7 +91,7 @@ float Model_cpu::accuracy(vector<vector<float>> &data, vector<int> &label) {
 
 	float* X_test_in = X_test;
 	for (int i = 0; i < this->layers.size(); i++) {
-		X_test_in = this->layers[i]->forward(X_test_in, data.size());
+		X_test_in = this->layers[i]->forward(X_test_in, data.size(), true);
 	}
 
 	int count = 0;

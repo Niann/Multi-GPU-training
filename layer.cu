@@ -135,7 +135,7 @@ ReluLayer::ReluLayer(int l1, int l2, int gpu) : Layer(l1, l2, gpu) {}
 
 SoftmaxLayer::SoftmaxLayer(int l1, int l2, int gpu) : Layer(l1, l2, gpu) {}
 
-float* ReluLayer::forward(float* X_in, int batch) {
+float* ReluLayer::forward(float* X_in, int batch, bool inference) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
@@ -145,10 +145,14 @@ float* ReluLayer::forward(float* X_in, int batch) {
 	cudaMalloc((void **)& dZ, numElements * sizeof(float));
 	relu(numElements, X_out, dZ);
 
+	if (inference){
+		cudaFree(A_prev);
+	}
+
 	return X_out; // X_out = A = relu(Z)
 }
 
-float* SoftmaxLayer::forward(float* X_in, int batch) {
+float* SoftmaxLayer::forward(float* X_in, int batch, bool inference) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
@@ -157,6 +161,10 @@ float* SoftmaxLayer::forward(float* X_in, int batch) {
 	int numElements = l_curr * batch;
 	softmax(numElements, X_out);
 	dZ = X_out; // store for backprop
+
+	if (inference){
+		cudaFree(A_prev);
+	}
 
 	return X_out; // X_out = softmax(Z)
 }
@@ -421,7 +429,7 @@ int main() {
 	float* X2 = s->forward(X1, batch);
 	printf("output matrix:\n");
 	printGPUMatrix(X2, l2, batch);
-	
+
 	printf("\nbackward pass\n");
 	printf("input matrix:\n");
 	printGPUMatrix(d_Y, l2, batch);
@@ -433,7 +441,7 @@ int main() {
 	float* dA0 = l->backward(dA1, batch);
 	printf("output matrix:\n");
 	printGPUMatrix(dA0, feature, batch);
-	
+
 	printf("\ngradient update\n");
 	s->gradientUpdate(1);
 	l->gradientUpdate(1);

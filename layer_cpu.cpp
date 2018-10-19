@@ -162,7 +162,7 @@ ReluLayer_cpu::ReluLayer_cpu(int l1, int l2, int process) : Layer_cpu(l1, l2, pr
 
 SoftmaxLayer_cpu::SoftmaxLayer_cpu(int l1, int l2, int process) : Layer_cpu(l1, l2, process) {}
 
-float* ReluLayer_cpu::forward(float* X_in, int batch) {
+float* ReluLayer_cpu::forward(float* X_in, int batch, bool inference) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
@@ -172,10 +172,14 @@ float* ReluLayer_cpu::forward(float* X_in, int batch) {
 	dZ = (float *)malloc(numElements * sizeof(float));
 	relu(numElements, X_out, dZ);
 
+	if (inference){
+		free(A_prev);
+	}
+
 	return X_out; // X_out = A = relu(Z)
 }
 
-float* SoftmaxLayer_cpu::forward(float* X_in, int batch) {
+float* SoftmaxLayer_cpu::forward(float* X_in, int batch, bool inference) {
 	// X_in input matrix, size (l_prev, batch_size), each column is a data point
 	A_prev = X_in; // save activation from previous layer for backprop
 	float* X_out = WX_b(W, X_in, b, l_curr, batch, l_prev); // X_out = Z = W @ X + b
@@ -184,6 +188,10 @@ float* SoftmaxLayer_cpu::forward(float* X_in, int batch) {
 	int numElements = l_curr * batch;
 	softmax(numElements, X_out);
 	dZ = X_out; // store for backprop
+
+	if (inference){
+		free(A_prev);
+	}
 
 	return X_out; // X_out = softmax(Z)
 }

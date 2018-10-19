@@ -26,8 +26,8 @@ protected:
 	float* A_prev; // activation from previous layer, book-keeping for backward pass
 public:
 	Layer(int l1, int l2, int gpu);
-	virtual float* forward(float* X_in, int batch) = 0;
-	virtual float* backward(float* dA, int batch) = 0;
+	virtual float* forward(float* X_in, int batch, bool inference) = 0;
+	virtual float* backward(float* dA, int batch, bool inference) = 0;
 	void SGDUpdate(float alpha);
 	void freeMemory();
 
@@ -45,7 +45,7 @@ protected:
 class ReluLayer : public Layer {
 public:
 	ReluLayer(int l1, int l2, int gpu);
-	float* forward(float* X_in, int batch);
+	float* forward(float* X_in, int batch, bool inference);
 	float* backward(float* dA, int batch);
 private:
 	void relu(int numElements, float* Z, float* dZ);
@@ -54,7 +54,7 @@ private:
 class SoftmaxLayer : public Layer {
 public:
 	SoftmaxLayer(int l1, int l2, int gpu);
-	float* forward(float* X_in, int batch);
+	float* forward(float* X_in, int batch, bool inference);
 	float* backward(float* Y, int batch);
 private:
 	void softmax(int numElements, float* Z);

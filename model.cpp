@@ -54,7 +54,7 @@ void Model::train(vector<vector<float>> data,vector<int> label) {
 	cudaMemcpy(d_X, X, data.size() * feature_size * sizeof(float), cudaMemcpyHostToDevice);
 	float* X_in = d_X;
 	for (int i = 0; i < this->layers.size(); i++) {
-		X_in = layers[i]->forward(X_in, batch_size);
+		X_in = layers[i]->forward(X_in, batch_size, false);
 	}
 
 	// backward pass
@@ -98,7 +98,7 @@ float Model::accuracy(vector<vector<float>> &data,vector<int> &label) {
 	cudaMemcpy(d_X_test, X_test, data.size() * feature_size * sizeof(float), cudaMemcpyHostToDevice);
 
 	for (int i = 0; i < this->layers.size(); i++) {
-		d_X_test = this->layers[i]->forward(d_X_test, data.size());
+		d_X_test = this->layers[i]->forward(d_X_test, data.size(), true);
 	}
 
 	float* preds = (float *)malloc(data.size() * out_size * sizeof(float));
