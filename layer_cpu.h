@@ -19,7 +19,7 @@ protected:
 public:
 	Layer_cpu(int l1, int l2, int process);
 	virtual float* forward(float* X_in, int batch, bool inference) = 0;
-	virtual float* backward(float* dA, int batch, bool inference) = 0;
+	virtual float* backward(float* dA, int batch) = 0;
 	void SGDUpdate(float alpha);
 	void freeMemory();
 

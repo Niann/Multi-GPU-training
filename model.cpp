@@ -4,7 +4,7 @@
 
 #define INPUT_SIZE 784
 #define LABEL_SIZE 10
-#define BATCH_SIZE 64
+#define BATCH_SIZE 256
 #define EPOCH 10
 
 #define IDX2C(i, j, ld) ((( j )*( ld ))+( i ))
@@ -162,7 +162,8 @@ int main(int argc, char **argv) {
 	cout << "data loaded" << endl;
 
 	vector<int> layers;
-	layers.push_back(300);
+	layers.push_back(2000);
+	layers.push_back(2000);
 
 	clock_t t = clock();
 	Model* model = new Model(INPUT_SIZE, LABEL_SIZE, 0.1f, BATCH_SIZE, layers, comm_size);
