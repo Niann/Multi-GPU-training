@@ -1,3 +1,5 @@
+require MNIST datasets.
+
 To compile **GPU** version:  
 
 module load OpenMPI/3.0.0-GCC-6.2.0-cuda9-ucx CUDA/9.0.176-GCC-6.2.0  
